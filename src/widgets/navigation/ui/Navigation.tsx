@@ -1,11 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, FileText, Package, MessageSquare, User } from 'lucide-react';
-import { supabase } from '@/lib/api/supabaseClient';
+import { Home, Box, Tag, MessageCircle, User, Bell } from 'lucide-react';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import BrandLogo from '@/shared/ui/BrandLogo';
+
+interface TabDef {
+  label: string;
+  to: string;
+  icon: typeof Home;
+  matches: string[];
+}
+
+const TABS: TabDef[] = [
+  { label: '홈', to: '/', icon: Home, matches: ['/'] },
+  {
+    label: '습득물',
+    to: '/getlist',
+    icon: Box,
+    matches: ['/getlist', '/searchfind']
+  },
+  {
+    label: '분실물',
+    to: '/lostlist',
+    icon: Tag,
+    matches: ['/lostlist', '/searchlost']
+  },
+  {
+    label: '게시판',
+    to: '/postlist',
+    icon: MessageCircle,
+    matches: ['/postlist', '/searchpost', '/createpost', '/postdetail']
+  }
+];
 
 const Navigation = () => {
   const location = useLocation();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const isLoggedIn = !!user;
+  const displayName =
+    user?.nickname || user?.email?.split('@')[0] || '';
 
   useEffect(() => {
     document.body.classList.add('has-navigation');
@@ -14,165 +47,108 @@ const Navigation = () => {
     };
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const isActive = (matches: string[]) => {
+    return matches.some((path) =>
+      path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+    );
+  };
 
-    const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (isMounted) {
-        setIsLoggedIn(!!data.session);
-      }
-    };
-
-    void fetchSession();
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (isMounted) {
-          setIsLoggedIn(!!session);
-        }
-      }
+  const isMyActive = () =>
+    ['/mypage', '/signin', '/signup', '/notification', '/notice'].some((p) =>
+      location.pathname.startsWith(p)
     );
 
-    return () => {
-      isMounted = false;
-      listener?.subscription.unsubscribe();
-    };
-  }, []);
-
-  // 현재 경로에 따라 active 상태 결정
-  const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(path);
-  };
-
-  const isMyPageActive = () => {
-    return location.pathname.startsWith('/mypage') ||
-           location.pathname.startsWith('/signin') ||
-           location.pathname.startsWith('/signup');
-  };
+  const myTo = isLoggedIn ? '/mypage' : '/signin';
+  const avatarInitial = displayName ? displayName.charAt(0) : '나';
 
   return (
     <>
+      {/* 데스크탑 상단 네비게이션 */}
       <nav className="fixed top-0 right-0 left-0 z-50 hidden border-b border-gray-200 bg-white md:block">
-        <div className="mx-auto max-w-7xl px-4">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-8">
-              <Link to="/">
-                <h2 className="text-[#4F7EFF]">찾아줘!</h2>
-              </Link>
-              <div className="flex gap-6">
-                <Link
-                  to="/"
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
-                    isActive('/')
-                      ? 'bg-[#4F7EFF]/10 text-[#4F7EFF]'
-                      : 'text-[#666] hover:text-[#4F7EFF]'
-                  }`}
-                >
-                  <Home className="h-4 w-4" />
-                  <span>홈</span>
-                </Link>
-                <Link
-                  to="/getlist"
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
-                    isActive('/getlist') || isActive('/searchfind')
-                      ? 'bg-[#4F7EFF]/10 text-[#4F7EFF]'
-                      : 'text-[#666] hover:text-[#4F7EFF]'
-                  }`}
-                >
-                  <FileText className="h-4 w-4" />
-                  <span>습득물</span>
-                </Link>
-                <Link
-                  to="/lostlist"
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
-                    isActive('/lostlist') || isActive('/searchlost')
-                      ? 'bg-[#4F7EFF]/10 text-[#4F7EFF]'
-                      : 'text-[#666] hover:text-[#4F7EFF]'
-                  }`}
-                >
-                  <Package className="h-4 w-4" />
-                  <span>분실물</span>
-                </Link>
-                <Link
-                  to="/postlist"
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
-                    isActive('/postlist') || isActive('/searchpost') || isActive('/createpost') || isActive('/postdetail')
-                      ? 'bg-[#4F7EFF]/10 text-[#4F7EFF]'
-                      : 'text-[#666] hover:text-[#4F7EFF]'
-                  }`}
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  <span>자유게시판</span>
-                </Link>
-              </div>
-            </div>
-            <Link
-              to={isLoggedIn ? '/mypage' : '/signin'}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 transition-colors ${
-                isMyPageActive()
-                  ? 'bg-[#4F7EFF] text-white'
-                  : 'border border-[#4F7EFF] text-[#4F7EFF] hover:bg-[#4F7EFF]/10'
-              }`}
-            >
-              <User className="h-4 w-4" />
-              <span>{isLoggedIn ? '마이페이지' : '로그인'}</span>
+        <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-6">
+          <div className="flex items-center gap-7">
+            <Link to="/" aria-label="홈으로 이동">
+              <BrandLogo size={30} />
             </Link>
+            <div className="flex items-center gap-1">
+              {TABS.map((tab) => (
+                <Link
+                  key={tab.to}
+                  to={tab.to}
+                  className={`rounded-full px-4 py-2 text-[15px] font-semibold transition-colors ${
+                    isActive(tab.matches)
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-gray-500 hover:text-primary'
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Link
+              to="/notification"
+              aria-label="알림"
+              className="text-gray-450 transition-colors hover:text-primary"
+            >
+              <Bell size={22} />
+            </Link>
+
+            {isLoggedIn ? (
+              <Link
+                to="/mypage"
+                className={`flex items-center gap-2 rounded-full py-1 pr-3 pl-1 transition-colors ${
+                  isMyActive() ? 'bg-primary/10' : 'hover:bg-gray-100'
+                }`}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                  {avatarInitial}
+                </span>
+                <span className="text-sm font-semibold text-gray-700">
+                  {displayName || '마이페이지'}
+                </span>
+              </Link>
+            ) : (
+              <Link
+                to="/signin"
+                className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+              >
+                로그인
+              </Link>
+            )}
           </div>
         </div>
       </nav>
 
-      <nav className="fixed right-0 bottom-0 left-0 z-50 border-t border-gray-200 bg-white md:hidden">
+      {/* 모바일 하단 탭바 */}
+      <nav className="fixed right-0 bottom-0 left-0 z-50 border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="grid h-16 grid-cols-5">
+          {TABS.map((tab) => {
+            const active = isActive(tab.matches);
+            const Icon = tab.icon;
+            return (
+              <Link
+                key={tab.to}
+                to={tab.to}
+                className={`flex flex-col items-center justify-center gap-1 ${
+                  active ? 'text-primary' : 'text-gray-400'
+                }`}
+              >
+                <Icon size={22} strokeWidth={active ? 2.4 : 2} />
+                <span className="text-[11px] font-medium">{tab.label}</span>
+              </Link>
+            );
+          })}
           <Link
-            to="/"
+            to={myTo}
             className={`flex flex-col items-center justify-center gap-1 ${
-              isActive('/') ? 'text-[#4F7EFF]' : 'text-[#999]'
+              isMyActive() ? 'text-primary' : 'text-gray-400'
             }`}
           >
-            <Home className="h-5 w-5" />
-            <span className="text-xs">홈</span>
-          </Link>
-          <Link
-            to="/getlist"
-            className={`flex flex-col items-center justify-center gap-1 ${
-              isActive('/getlist') || isActive('/searchfind') ? 'text-[#4F7EFF]' : 'text-[#999]'
-            }`}
-          >
-            <FileText className="h-5 w-5" />
-            <span className="text-xs">습득물</span>
-          </Link>
-          <Link
-            to="/lostlist"
-            className={`flex flex-col items-center justify-center gap-1 ${
-              isActive('/lostlist') || isActive('/searchlost') ? 'text-[#4F7EFF]' : 'text-[#999]'
-            }`}
-          >
-            <Package className="h-5 w-5" />
-            <span className="text-xs">분실물</span>
-          </Link>
-          <Link
-            to="/postlist"
-            className={`flex flex-col items-center justify-center gap-1 ${
-              isActive('/postlist') || isActive('/searchpost') || isActive('/createpost') || isActive('/postdetail') ? 'text-[#4F7EFF]' : 'text-[#999]'
-            }`}
-          >
-            <MessageSquare className="h-5 w-5" />
-            <span className="text-xs">자유게시판</span>
-          </Link>
-          <Link
-            to={isLoggedIn ? '/mypage' : '/signin'}
-            className={`flex flex-col items-center justify-center gap-1 ${
-              isMyPageActive() ? 'text-[#4F7EFF]' : 'text-[#999]'
-            }`}
-          >
-            <User className="h-5 w-5" />
-            <span className="text-xs">
-              {isLoggedIn ? '마이페이지' : '로그인'}
-            </span>
+            <User size={22} strokeWidth={isMyActive() ? 2.4 : 2} />
+            <span className="text-[11px] font-medium">MY</span>
           </Link>
         </div>
       </nav>

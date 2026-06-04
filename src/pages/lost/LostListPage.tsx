@@ -1,151 +1,33 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Search } from 'lucide-react';
-import ItemBox from '@/entities/item/ui/ItemBox';
-import Skeleton from '@/entities/item/ui/Skeleton';
-import QueryState from '@/shared/ui/QueryState';
-import EmptyState from '@/shared/ui/EmptyState';
+import { useSearchParams } from 'react-router-dom';
+import ItemListView from '@/widgets/item-list/ui/ItemListView';
 import { useLostItemsInfinite } from '@/entities/lost/model/useLostItemsInfinite';
-import useScrollRestoration from '@/shared/hooks/useScrollRestoration';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
-import { useProgressIndicator } from '@/shared/hooks/useProgressIndicator';
 
 const LostList = () => {
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isError
-  } = useLostItemsInfinite({
-    query: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 30
-    }
+  const [params] = useSearchParams();
+  const category = params.get('category');
+
+  const query = useLostItemsInfinite({
+    query: { staleTime: 1000 * 60 * 5, gcTime: 1000 * 60 * 30 }
   });
 
-  const items = data?.pages?.flatMap((page) => page) ?? [];
-  useScrollRestoration(scrollContainerRef, 'lostlist');
-  useProgressIndicator(isFetchingNextPage);
-
-  // 데스크탑에서 스크롤이 부족할 경우 자동으로 다음 페이지 로드
-  useEffect(() => {
-    const checkAndLoadMore = () => {
-      const el = scrollContainerRef.current;
-      if (!el || !hasNextPage || isFetchingNextPage) return;
-
-      const { scrollHeight, clientHeight } = el;
-      // 스크롤 가능한 콘텐츠가 뷰포트보다 작거나 거의 같으면 다음 페이지 로드
-      if (scrollHeight <= clientHeight + 100) {
-        void fetchNextPage();
-      }
-    };
-
-    // 아이템이 로드된 후 체크
-    if (items.length > 0) {
-      // DOM 업데이트 후 체크하기 위해 setTimeout 사용
-      setTimeout(checkAndLoadMore, 100);
-    }
-  }, [items.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const handleScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el || !hasNextPage || isFetchingNextPage) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = el;
-
-    if (scrollTop + clientHeight >= scrollHeight - 50) {
-      void fetchNextPage();
-    }
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
   useHeaderConfig(
-    () => ({
-      isShowSymbol: true,
-      isShowSearch: true,
-      link: '/searchlost',
-      children: '분실물 확인'
-    }),
+    () => ({ children: '분실물', isShowSearch: true, link: '/searchlost' }),
     []
   );
 
-  useEffect(() => {
-    const scrollContainer = scrollContainerRef.current;
-    if (!scrollContainer) return;
-
-    scrollContainer.addEventListener('scroll', handleScroll);
-    return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll);
-    };
-  }, [handleScroll]);
-
-  const loadingFallback = (
-    <div className="flex h-nav-safe w-full flex-col items-center bg-white">
-      <div className="mx-auto w-full max-w-7xl">
-        <div
-          ref={scrollContainerRef}
-          className="overflow-auto"
-          style={{
-            height:
-              'calc(100dvh - var(--app-nav-top, 0px) - var(--app-nav-bottom))'
-          }}
-        >
-          <div className="flex flex-col items-center lg:grid lg:grid-cols-2 lg:gap-4 md:px-5 lg:px-5">
-            {Array.from({ length: 10 }).map((_, index) => (
-              <div key={index} className="w-full">
-                <Skeleton />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <QueryState
-      isLoading={isLoading}
-      isError={isError}
-      loadingFallback={loadingFallback}
-    >
-      <div className="flex h-nav-safe w-full flex-col items-center bg-white">
-        <div className="mx-auto w-full max-w-7xl">
-          <div
-            ref={scrollContainerRef}
-            className="overflow-auto"
-            style={{
-              height:
-                'calc(100dvh - var(--app-nav-top, 0px) - var(--app-nav-bottom))'
-            }}
-          >
-            {items.length > 0 ? (
-              <ul className="flex flex-col items-center lg:grid lg:grid-cols-2 lg:gap-4 md:px-5 lg:px-5">
-                {items.map((item, index) => (
-                  <li key={`${item.atcId}-${index}`} className="w-full">
-                    <ItemBox item={item} itemType="lost" />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState
-                title="등록된 분실물이 없습니다."
-                description="새로운 분실물 신고를 기다리고 있어요."
-              />
-            )}
-            {isFetchingNextPage && <div className="py-8" />}
-          </div>
-        </div>
-        <Link
-          to="/searchlost"
-          className="fixed bottom-10 right-10 z-20 hidden rounded-full bg-[#4F7EFF] p-4 shadow-xl transition-all hover:scale-110 hover:bg-[#3B63E3] md:block"
-          aria-label="분실물 상세검색"
-        >
-          <Search className="h-6 w-6 text-white" />
-        </Link>
-      </div>
-    </QueryState>
+    <ItemListView
+      itemType="lost"
+      title="분실물"
+      searchLink="/searchlost"
+      searchPlaceholder="분실물 검색"
+      scrollKey="lostlist"
+      emptyTitle="등록된 분실물이 없습니다."
+      emptyDescription="새로운 분실물 신고를 기다리고 있어요."
+      initialCategory={category}
+      query={query}
+    />
   );
 };
 

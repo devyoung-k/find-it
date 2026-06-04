@@ -13,17 +13,6 @@ export interface AllData {
   lstPrdtNm: string;
 }
 
-export interface LostAllData {
-  lstFilePathImg: string;
-  lstPlace: string;
-  lstPrdtNm: string;
-  lstSbjt: string;
-  lstSn: string;
-  lstYmd: string;
-  prdtClNm: string;
-  rnum: string;
-}
-
 export interface GetDetailData {
   atcId: string;
   csteSteNm: string;
@@ -69,21 +58,4 @@ export interface DetailData {
   description: string;
   storage: string;
   contact: string;
-}
-
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | JsonArray
-  | JsonObject
-  | null;
-
-export type JsonArray = JsonValue[];
-
-export type JsonItem = JsonValue | string | GetDetailData;
-export interface JsonType extends Array<JsonItem> {}
-
-export interface JsonObject {
-  [key: string]: JsonValue;
 }

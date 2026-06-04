@@ -1,14 +1,40 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { MapPin, Phone, Share2, Bookmark, ChevronLeft } from 'lucide-react';
 import KakaoMap from '@/shared/ui/KakaoMap';
 import { DetailData } from '@/types/types';
-import { Camera, MapPin, Phone, Share2 } from 'lucide-react';
 import { logger } from '@/lib/utils/logger';
 import formatDisplayDate from '@/lib/utils/formatDisplayDate';
+import CategoryThumb from '@/shared/ui/item/CategoryThumb';
+import TypeBadge from '@/shared/ui/item/TypeBadge';
+import {
+  formatCategoryLabel,
+  getCategoryMeta
+} from '@/shared/config/categoryMeta';
 
 interface ItemDetailProps {
   detail: DetailData;
+  kind?: 'get' | 'lost';
 }
 
-const ItemDetail = ({ detail }: ItemDetailProps) => {
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-start gap-4 border-b border-gray-50 py-3">
+    <span className="w-20 shrink-0 text-sm text-gray-450">{label}</span>
+    <span className="text-sm font-medium text-gray-900">{value || '-'}</span>
+  </div>
+);
+
+const ItemDetail = ({ detail, kind = 'get' }: ItemDetailProps) => {
+  const navigate = useNavigate();
+  const [bookmarked, setBookmarked] = useState(false);
+
+  const isGet = kind === 'get';
+  const placeLabel = isGet ? '습득장소' : '분실장소';
+  const dateLabel = isGet ? '습득일자' : '분실일자';
+  const ctaLabel = isGet ? '내 물건이에요 · 문의하기' : '제가 습득했어요';
+  const category = formatCategoryLabel(detail.item_type);
+  const { fg } = getCategoryMeta(detail.item_type);
+
   const handleShare = async () => {
     const sharePayload = {
       title: '찾아줘! 분실물 안내',
@@ -27,107 +53,159 @@ const ItemDetail = ({ detail }: ItemDetailProps) => {
 
     try {
       await navigator.clipboard.writeText(sharePayload.url);
-      alert('공유하기를 지원하지 않는 브라우저입니다. 링크를 클립보드에 복사했어요.');
+      alert('링크를 클립보드에 복사했어요.');
     } catch (clipboardError) {
       logger.error('Clipboard write failed', clipboardError);
-      alert('링크 복사에도 실패했습니다. 다시 시도해 주세요.');
+      alert('링크 복사에 실패했습니다. 다시 시도해 주세요.');
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-4 px-4 md:py-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="grid md:grid-cols-2 gap-0">
-            <div className="p-4 md:p-8 md:border-r md:border-gray-200">
-              <div className="bg-gray-100 rounded-lg aspect-4/3 flex items-center justify-center mb-4 md:mb-8 overflow-hidden">
-                {detail.image ? (
-                  <img
-                    src={detail.image}
-                    alt={detail.item_name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="text-center">
-                    <Camera className="w-16 h-16 md:w-24 md:h-24 mx-auto text-gray-400 mb-2 md:mb-4" />
-                    <p className="text-sm md:text-base text-gray-500">이미지 준비중입니다.</p>
-                  </div>
-                )}
-              </div>
+  const titleBlock = (
+    <>
+      <div className="flex items-center gap-1.5">
+        <TypeBadge type={isGet ? 'get' : 'lost'} label={isGet ? '습득물' : '분실물'} />
+        <span className="text-[13px] font-semibold" style={{ color: fg }}>
+          {category}
+        </span>
+      </div>
+      <h1 className="mt-2.5 text-[22px] leading-snug font-extrabold text-gray-900">
+        {detail.item_name}
+      </h1>
+      <div className="mt-4">
+        <InfoRow label={placeLabel} value={detail.place} />
+        <InfoRow label={dateLabel} value={formatDisplayDate(detail.date)} />
+        <InfoRow label="물품분류" value={detail.item_type} />
+        <InfoRow label="관리번호" value={detail.id} />
+      </div>
+      {detail.description && (
+        <div className="mt-6">
+          <h2 className="text-base font-bold text-gray-900">상세 내용</h2>
+          <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-gray-600">
+            {detail.description}
+          </p>
+        </div>
+      )}
+    </>
+  );
 
-              <div className="space-y-4 md:space-y-6">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-semibold mb-4 md:mb-6">{detail.item_name}</h2>
-
-                  <div className="space-y-3 md:space-y-4">
-                    <div className="flex border-b border-gray-100 pb-3">
-                      <span className="w-20 md:w-24 text-sm md:text-base text-gray-600 shrink-0">습득장소</span>
-                      <span className="text-sm md:text-base text-gray-900">{detail.place}</span>
-                    </div>
-
-                    <div className="flex border-b border-gray-100 pb-3">
-                      <span className="w-20 md:w-24 text-sm md:text-base text-gray-600 shrink-0">습득일자</span>
-                      <span className="text-sm md:text-base text-gray-900">
-                        {formatDisplayDate(detail.date)}
-                      </span>
-                    </div>
-
-                    <div className="flex border-b border-gray-100 pb-3">
-                      <span className="w-20 md:w-24 text-sm md:text-base text-gray-600 shrink-0">관리번호</span>
-                      <span className="text-sm md:text-base text-gray-900">{detail.id}</span>
-                    </div>
-
-                    <div className="flex border-b border-gray-100 pb-3">
-                      <span className="w-20 md:w-24 text-sm md:text-base text-gray-600 shrink-0">물품분류</span>
-                      <span className="text-sm md:text-base text-gray-900">{detail.item_type}</span>
-                    </div>
-
-                    <div className="flex pt-1">
-                      <span className="w-20 md:w-24 text-sm md:text-base text-gray-600 shrink-0">상세내용</span>
-                      <span className="text-sm md:text-base text-gray-900">{detail.description}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 md:p-8 bg-gray-50">
-              <div className="space-y-4 md:space-y-6">
-                <div>
-                  <h3 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">보관장소</h3>
-                  <div className="bg-white rounded-lg p-3 md:p-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-blue-600 shrink-0" />
-                      <span className="text-sm md:text-base">{detail.storage}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Phone className="w-5 h-5 text-blue-600 shrink-0" />
-                      <span className="text-sm md:text-base text-gray-600">{detail.contact}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="bg-gray-200 rounded-lg aspect-4/3 flex items-center justify-center relative overflow-hidden">
-                    <KakaoMap place={detail.storage} className="w-full h-full" />
-                  </div>
-                  <p className="text-xs md:text-sm text-gray-500 mt-2 text-center">
-                    지도에서 보관 장소의 위치를 확인하세요
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  className="w-full bg-white border-2 border-gray-300 text-gray-700 py-2 md:py-3 px-4 md:px-6 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Share2 className="w-5 h-5" />
-                  공유하기
-                </button>
-              </div>
-            </div>
+  const storageBlock = isGet && (detail.storage || detail.contact) && (
+    <div className="mt-6 md:mt-0">
+      <h2 className="mb-2 text-base font-bold text-gray-900">보관 장소</h2>
+      <div className="space-y-2.5 rounded-2xl border border-gray-100 bg-white p-4">
+        {detail.storage && (
+          <div className="flex items-center gap-2.5">
+            <MapPin size={18} className="shrink-0 text-primary" />
+            <span className="text-sm text-gray-800">{detail.storage}</span>
+          </div>
+        )}
+        {detail.contact && (
+          <div className="flex items-center gap-2.5">
+            <Phone size={18} className="shrink-0 text-primary" />
+            <a
+              href={`tel:${detail.contact}`}
+              className="text-sm text-gray-600 hover:text-primary"
+            >
+              {detail.contact}
+            </a>
+          </div>
+        )}
+      </div>
+      {detail.storage && (
+        <div className="mt-3 hidden overflow-hidden rounded-2xl border border-gray-100 md:block">
+          <div className="aspect-[4/3] w-full bg-gray-100">
+            <KakaoMap place={detail.storage} className="h-full w-full" />
           </div>
         </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-nav-safe bg-white pb-28 md:bg-gray-50 md:pb-12">
+      <div className="mx-auto w-full max-w-[1080px] md:px-6 md:pt-6">
+        {/* 데스크탑 브레드크럼 */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="mb-4 hidden items-center gap-1 text-sm text-gray-450 hover:text-primary md:flex"
+        >
+          <ChevronLeft size={16} />
+          {isGet ? '습득물 목록' : '분실물 목록'}
+        </button>
+
+        <div className="md:grid md:grid-cols-2 md:gap-10 md:rounded-2xl md:bg-white md:p-8 md:shadow-sm">
+          {/* 좌측: 이미지 + 보관장소 */}
+          <div>
+            <CategoryThumb
+              image={detail.image}
+              prdtClNm={detail.item_type}
+              className="aspect-[4/3] w-full md:rounded-2xl"
+              iconSize={76}
+              alt={detail.item_name}
+            />
+            <div className="hidden md:block">{storageBlock}</div>
+          </div>
+
+          {/* 우측: 정보 */}
+          <div className="px-4 pt-5 md:px-0 md:pt-0">
+            {titleBlock}
+
+            {/* 데스크탑 액션 */}
+            <div className="mt-8 hidden items-center gap-3 md:flex">
+              <button
+                type="button"
+                onClick={() => setBookmarked((p) => !p)}
+                aria-label="북마크"
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${
+                  bookmarked
+                    ? 'border-primary text-primary'
+                    : 'border-gray-200 text-gray-500'
+                }`}
+              >
+                <Bookmark size={20} fill={bookmarked ? 'currentColor' : 'none'} />
+              </button>
+              <button
+                type="button"
+                onClick={handleShare}
+                aria-label="공유하기"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500"
+              >
+                <Share2 size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={handleShare}
+                className="h-12 flex-1 rounded-xl bg-primary text-[15px] font-semibold text-white transition-colors hover:bg-primary/90"
+              >
+                {ctaLabel}
+              </button>
+            </div>
+
+            {/* 모바일 보관장소 */}
+            <div className="md:hidden">{storageBlock}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 모바일 하단 액션 바 (하단 탭 위에 고정) */}
+      <div className="fixed right-0 bottom-16 left-0 z-40 flex items-center gap-3 border-t border-gray-100 bg-white px-4 py-3 md:hidden">
+        <button
+          type="button"
+          onClick={() => setBookmarked((p) => !p)}
+          aria-label="북마크"
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${
+            bookmarked ? 'border-primary text-primary' : 'border-gray-200 text-gray-500'
+          }`}
+        >
+          <Bookmark size={20} fill={bookmarked ? 'currentColor' : 'none'} />
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="h-12 flex-1 rounded-xl bg-primary text-[15px] font-semibold text-white"
+        >
+          {ctaLabel}
+        </button>
       </div>
     </div>
   );

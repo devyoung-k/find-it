@@ -1,27 +1,16 @@
-import { useEffect, useState } from 'react';
 import MyPage from '@/pages/account/MyPagePage';
 import SignIn from '@/pages/account/SignInPage';
-import { supabase } from '@/lib/api/supabaseClient';
+import { useAuthStore } from '@/features/auth/model/authStore';
 
 const MypageEntry = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const status = useAuthStore((s) => s.status);
+  const user = useAuthStore((s) => s.user);
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setIsLoggedIn(!!data.session);
-      setChecked(true);
-    };
-
-    void fetchSession();
-  }, []);
-
-  if (!checked) {
+  if (status === 'idle' || status === 'loading') {
     return null;
   }
 
-  return isLoggedIn ? <MyPage /> : <SignIn />;
+  return user ? <MyPage /> : <SignIn />;
 };
 
 export default MypageEntry;

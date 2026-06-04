@@ -1,11 +1,8 @@
-import icon_prev from '@/assets/icons/icon_prev.svg';
-import LOGO_SYMBOL from '@/assets/icons/LOGO_SYMBOL.svg';
-import LOGOTYPE from '@/assets/icons/LOGOTYPE_true.svg';
-import icon_search from '@/assets/icons/icon_search.svg';
+import { ChevronLeft, Search, Bell } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-
-import { ReactNode, Children } from 'react';
+import { ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import BrandLogo from '@/shared/ui/BrandLogo';
 
 export interface HeaderProps {
   isShowLogo?: boolean;
@@ -13,7 +10,8 @@ export interface HeaderProps {
   isShowSymbol?: boolean;
   isShowSearch?: boolean;
   isShowSubmit?: boolean;
-  empty?: boolean; // 헤더 영역에 2개 요소만 사용 시 빈자리에 해당 prop 전달 필요
+  isShowBell?: boolean;
+  empty?: boolean; // 우측 자리 맞춤용 spacer
   link?: string;
   customStyle?: string;
   children?: ReactNode;
@@ -21,21 +19,13 @@ export interface HeaderProps {
   submitLabel?: string;
 }
 
-type ElementType =
-  | string
-  | number
-  | boolean
-  | JSX.Element
-  | Iterable<ReactNode>
-  | null
-  | undefined;
-
 const Header = ({
   isShowLogo,
   isShowPrev,
   isShowSymbol,
   isShowSearch,
   isShowSubmit,
+  isShowBell,
   empty,
   link,
   customStyle,
@@ -45,18 +35,6 @@ const Header = ({
 }: HeaderProps) => {
   const queryClient = useQueryClient();
   const location = useLocation();
-
-  let homeLogo: ElementType = null;
-  let symbolLogo: ElementType = null;
-  let prevIcon: ElementType = null;
-  let searchIcon: ElementType = null;
-  let paragraph: ElementType = null;
-  let submitButton: ElementType = null;
-  let emptyBox: ElementType = null;
-
-  const baseWrapperStyle =
-    'mx-auto flex h-[26px] w-full items-center px-5 md:px-8 lg:max-w-[1280px]';
-
   const navigate = useNavigate();
 
   const handlePreviousPage = () => {
@@ -65,76 +43,68 @@ const Header = ({
       location.pathname === '/searchfindresult' ||
       location.pathname === '/searchlostresult'
     ) {
-      queryClient.removeQueries({
-        queryKey: ['searchFindResult'],
-        exact: true
-      });
-
-      queryClient.removeQueries({
-        queryKey: ['searchLostResult'],
-        exact: true
-      });
+      queryClient.removeQueries({ queryKey: ['searchFindResult'], exact: true });
+      queryClient.removeQueries({ queryKey: ['searchLostResult'], exact: true });
     }
   };
 
-  if (isShowLogo !== undefined) {
-    if (isShowLogo) {
-      homeLogo = (
-        <Link to="/">
-          <h1 aria-label="메인 페이지로 이동">
-            <img src={LOGOTYPE} alt="찾아줘 로고 풀버전" />
-          </h1>
-        </Link>
-      );
-    } else {
-      homeLogo = null;
-    }
+  // 홈: 로고 좌측 + 벨 우측 자동
+  const showBell = isShowBell || isShowLogo;
+
+  const leftItems: ReactNode[] = [];
+  if (isShowPrev) {
+    leftItems.push(
+      <button
+        key="prev"
+        onClick={handlePreviousPage}
+        aria-label="이전으로"
+        className="-ml-1 text-gray-700"
+      >
+        <ChevronLeft size={26} />
+      </button>
+    );
+  }
+  if (isShowLogo) {
+    leftItems.push(
+      <Link key="logo" to="/" aria-label="메인 페이지로 이동">
+        <h1>
+          <BrandLogo size={28} />
+        </h1>
+      </Link>
+    );
+  }
+  if (isShowSymbol && !isShowLogo) {
+    leftItems.push(
+      <Link key="symbol" to="/" aria-label="메인 페이지로 이동">
+        <BrandLogo size={26} showWordmark={false} />
+      </Link>
+    );
   }
 
-  if (isShowSymbol !== undefined) {
-    if (isShowSymbol) {
-      symbolLogo = (
-        <Link to="/">
-          <h1 aria-label="메인 페이지로 이동">
-            <img src={LOGO_SYMBOL} alt="찾아줘 로고 약식버전" />
-          </h1>
-        </Link>
-      );
-    } else {
-      symbolLogo = null;
-    }
+  const rightItems: ReactNode[] = [];
+  if (isShowSearch && link) {
+    rightItems.push(
+      <Link key="search" to={link} aria-label="검색하기" className="text-gray-700">
+        <Search size={22} />
+      </Link>
+    );
   }
-
-  if (isShowPrev !== undefined) {
-    if (isShowPrev) {
-      prevIcon = (
-        <button onClick={handlePreviousPage}>
-          <img src={icon_prev} alt="이전으로" />
-        </button>
-      );
-    } else {
-      prevIcon = null;
-    }
+  if (showBell) {
+    rightItems.push(
+      <Link key="bell" to="/notification" aria-label="알림" className="text-gray-700">
+        <Bell size={22} />
+      </Link>
+    );
   }
-
-  if (isShowSearch !== undefined) {
-    if (isShowSearch && link) {
-      searchIcon = (
-        <Link to={link}>
-          <img src={icon_search} alt="검색하기" />
-        </Link>
-      );
-    } else {
-      searchIcon = null;
-    }
-  }
-
   if (isShowSubmit !== undefined) {
     const isActive = Boolean(isShowSubmit);
-    submitButton = (
+    rightItems.push(
       <button
+        key="submit"
         type="button"
-        className={isActive ? 'text-primary' : 'text-gray-400'}
+        className={`text-[15px] font-semibold ${
+          isActive ? 'text-primary' : 'text-gray-350'
+        }`}
         disabled={!isActive}
         onClick={isActive ? onSubmitClick : undefined}
       >
@@ -142,49 +112,45 @@ const Header = ({
       </button>
     );
   }
-
-  if (children !== undefined) {
-    paragraph = typeof children === 'string'
-      ? <p className="text-[20px] font-semibold">{children}</p>
-      : children;
+  if (empty && rightItems.length === 0) {
+    rightItems.push(<span key="empty" aria-hidden className="h-6 w-6" />);
   }
 
-  if (empty !== undefined) {
-    emptyBox = <span aria-hidden className="h-[21px] w-[21px]"></span>;
-  }
+  const title =
+    children !== undefined ? (
+      typeof children === 'string' ? (
+        <p className="truncate text-[17px] font-bold text-gray-900">{children}</p>
+      ) : (
+        children
+      )
+    ) : null;
 
-  const shouldCenterSymbolOnly = !paragraph && !homeLogo && symbolLogo;
-  const leftItems = Children.toArray(
-    [prevIcon, shouldCenterSymbolOnly ? null : symbolLogo].filter(Boolean)
-  );
-  const centerContent = paragraph ?? homeLogo ?? (shouldCenterSymbolOnly ? symbolLogo : null);
-  const rightItems = Children.toArray([searchIcon, submitButton, emptyBox].filter(Boolean));
+  // 로고는 좌측 정렬이므로 가운데 비움
+  const centerContent = isShowLogo ? null : title;
 
   return (
-    <>
+    <header
+      className="fixed top-0 left-0 z-[9999] w-full border-b border-gray-50 bg-white md:hidden"
+      role="banner"
+    >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[10000] focus:bg-white focus:px-4 focus:py-2"
       >
         메인 콘텐츠로 건너뛰기
       </a>
-      <header
-        className="fixed top-0 left-1/2 z-[9999] w-full -translate-x-1/2 transform bg-white py-[20px] md:hidden"
-        role="banner"
+      <div
+        className={`mx-auto flex h-14 w-full items-center px-4 ${customStyle || ''}`}
       >
-        <div className={`${baseWrapperStyle} ${customStyle || ''}`}>
-          <div className="flex min-w-[48px] items-center gap-2">
-            {leftItems.length > 0 ? leftItems : null}
-          </div>
-          <div className="flex flex-1 items-center justify-center text-center">
-            {centerContent}
-          </div>
-          <div className="flex min-w-[48px] items-center justify-end gap-2">
-            {rightItems.length > 0 ? rightItems : null}
-          </div>
+        <div className="flex min-w-[56px] items-center gap-2">{leftItems}</div>
+        <div className="flex flex-1 items-center justify-center px-1 text-center">
+          {centerContent}
         </div>
-      </header>
-    </>
+        <div className="flex min-w-[56px] items-center justify-end gap-3">
+          {rightItems}
+        </div>
+      </div>
+    </header>
   );
 };
 

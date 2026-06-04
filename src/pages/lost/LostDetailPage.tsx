@@ -30,7 +30,13 @@ const GetDetail = () => {
 
   return (
     <div className="w-full">
-      {detail && <ItemDetail detail={detail} />}
+      {detail ? (
+        <ItemDetail detail={detail} kind="lost" />
+      ) : (
+        <div className="flex min-h-[60vh] items-center justify-center text-sm text-gray-400">
+          불러오는 중...
+        </div>
+      )}
     </div>
   );
 };

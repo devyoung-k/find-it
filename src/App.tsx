@@ -4,6 +4,7 @@ import AppProviders from '@/app/providers/AppProviders';
 import AppRouter from '@/app/router/AppRouter';
 import ErrorBoundary from '@/shared/ui/ErrorBoundary';
 import { logger } from '@/lib/utils/logger';
+import { useAuthStore } from '@/features/auth/model/authStore';
 import { Analytics } from '@vercel/analytics/react';
 
 const SPLASH_KEY = 'alreadyVisited';
@@ -41,6 +42,10 @@ const getInitialSplashState = () => {
 
 const App = () => {
   const [showSplash, setShowSplash] = useState(getInitialSplashState);
+
+  useEffect(() => {
+    void useAuthStore.getState().init();
+  }, []);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;

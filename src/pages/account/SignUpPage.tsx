@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AuthError, type PostgrestError } from '@supabase/supabase-js';
-import { supabase } from '@/lib/api/supabaseClient';
-import { fetchProfileByNickname, upsertProfile } from '@/lib/api/profile';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import { fetchProfileByNickname } from '@/lib/api/profile';
 import InputForm from '@/features/auth/sign-in/ui/InputForm';
 import useSidoList from '@/features/auth/sign-in/hooks/useSidoList';
 import useGunguList from '@/features/auth/sign-in/hooks/useGunguList';
@@ -27,6 +27,8 @@ type AlertProps =
 type ConfirmProps = '' | 'doubleCheckNickname';
 
 const SignUp = () => {
+  const navigate = useNavigate();
+  const signup = useAuthStore((s) => s.signup);
   // 이메일과 비밀번호 정규식
   const regex = {
     emailRegex: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
@@ -227,28 +229,22 @@ const SignUp = () => {
     selectSecondItem
   ]);
 
-  const getSignUpErrorMessage = (error: AuthError) => {
-    const message = error.message.toLowerCase();
+  const getSignUpErrorMessage = (error: unknown) => {
+    const message = (error instanceof Error ? error.message : '').toLowerCase();
 
-    if (message.includes('email address') && message.includes('invalid')) {
-      return '허용되지 않은 이메일 주소입니다. 허용된 도메인으로 다시 시도해주세요.';
-    }
-    if (
-      message.includes('already registered') ||
-      message.includes('user already registered')
-    ) {
+    if (message.includes('이메일') && message.includes('이미')) {
       return '이미 가입된 이메일입니다. 로그인하거나 다른 이메일을 사용해주세요.';
     }
-    if (
-      message.includes('password') &&
-      message.includes('should be at least')
-    ) {
+    if (message.includes('already') || message.includes('exist')) {
+      return '이미 가입된 이메일 또는 닉네임입니다.';
+    }
+    if (message.includes('password') || message.includes('비밀번호')) {
       return '비밀번호 조건을 만족하지 않습니다. 영어, 숫자, 특수문자를 포함한 8자 이상으로 입력해주세요.';
     }
     return '회원가입에 실패했습니다. 입력 정보를 다시 확인해주세요.';
   };
 
-  // 유저 데이터 supabase에 쓰기
+  // 백엔드(/api/auth/signup)로 가입 — 유저+프로필을 함께 생성
   const createUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (variant !== 'submit' || isSubmitting) {
@@ -259,58 +255,17 @@ const SignUp = () => {
     setIsSubmitting(true);
 
     try {
-      const normalizedEmail = emailValue.trim();
-
-      const { data, error } = await supabase.auth.signUp({
-        email: normalizedEmail,
+      await signup({
+        email: emailValue.trim(),
         password: passwordValue,
-        options: {
-          data: {
-            nickname: nicknameValue,
-            state: selectFirstItem,
-            city: selectSecondItem
-          }
-        }
+        nickname: nicknameValue,
+        state: selectFirstItem,
+        city: selectSecondItem
       });
-
-      if (error) {
-        throw error;
-      }
-
-      const userId = data.user?.id;
-
-      if (userId) {
-        try {
-          await upsertProfile(userId, {
-            email: normalizedEmail,
-            nickname: nicknameValue,
-            state: selectFirstItem,
-            city: selectSecondItem,
-            keywords: ''
-          });
-        } catch (profileError) {
-          const pgError = profileError as PostgrestError;
-          if (pgError?.code === '23503') {
-            // 프로필 FK는 이메일 인증 이후 auth.users에 행이 생기면 보강한다.
-            logger.warn(
-              '[signup] 프로필 생성이 지연되어 로그인 후 다시 시도합니다.'
-            );
-          } else {
-            throw profileError;
-          }
-        }
-      }
-
-      window.location.href = '/welcome';
+      navigate('/welcome');
     } catch (error) {
-      logger.error('회원가입 유저 데이터 전송 오류', error);
-      if (error instanceof AuthError) {
-        setSubmitError(getSignUpErrorMessage(error));
-      } else {
-        setSubmitError(
-          '회원가입 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
-        );
-      }
+      logger.error('회원가입 오류', error);
+      setSubmitError(getSignUpErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }

@@ -75,7 +75,7 @@
 
   @media (max-width: 767px) {
     body.has-mobile-header {
-      --app-nav-top: calc(66px + env(safe-area-inset-top, 0px));
+      --app-nav-top: calc(56px + env(safe-area-inset-top, 0px));
     }
   }
 
@@ -134,21 +134,6 @@
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   }
 
-  /* Swiper 커스텀 스타일 */
-  .swiper-pagination {
-    position: relative !important;
-    margin-top: 1rem;
-  }
-
-  .swiper-pagination-bullet {
-    width: 8px !important;
-    height: 8px !important;
-    opacity: 0.5 !important;
-  }
-
-  .swiper-pagination-bullet-active {
-    opacity: 1 !important;
-  }
 }
 
 @layer utilities {

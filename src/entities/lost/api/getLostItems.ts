@@ -1,4 +1,5 @@
 import { AllData } from '@/types/types';
+import { API_BASE_URL, buildHeaders } from '@/lib/api/auth';
 
 const DEFAULT_IMAGE =
   'https://www.lost112.go.kr/lostnfs/images/sub/img02_no_img.gif';
@@ -17,46 +18,13 @@ export interface GetLostItemsResponse {
   >;
 }
 
-const resolveApiBaseUrl = () => {
-  const envValue = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/$/,
-    ''
-  );
-  const base = envValue && envValue.length > 0 ? envValue : 'http://52.79.241.212:8080/api';
-
-  if (
-    typeof window !== 'undefined' &&
-    window.location.protocol === 'https:' &&
-    base.startsWith('http://')
-  ) {
-    // When served over HTTPS, go through the Vercel rewrite to avoid mixed content.
-    return `${window.location.origin}/api`;
-  }
-
-  return base;
-};
-
-const API_BASE_URL = resolveApiBaseUrl();
-
-const API_SECURITY_KEY = import.meta.env.VITE_API_SECURITY_KEY as
-  | string
-  | undefined;
-
 export const getLostItems = async (
   page: number = 0,
   size: number = 10
 ): Promise<AllData[]> => {
-  const requestOptions: RequestInit = {};
-
-  if (API_SECURITY_KEY) {
-    requestOptions.headers = {
-      'X-API-KEY': API_SECURITY_KEY
-    };
-  }
-
   const response = await fetch(
     `${API_BASE_URL}/lost-items?page=${page}&size=${size}`,
-    requestOptions
+    { headers: buildHeaders() }
   );
 
   if (!response.ok) {
@@ -69,18 +37,26 @@ export const getLostItems = async (
     throw new Error(json.message || '분실물 데이터 형식이 올바르지 않습니다.');
   }
 
-  return json.data.map((item) => ({
-    atcId: item.atcId,
-    depPlace: '',
-    fdFilePathImg: DEFAULT_IMAGE,
-    fdPrdtNm: '',
-    fdSbjt: '',
-    fdSn: '',
-    fdYmd: '',
-    prdtClNm: item.prdtClNm,
-    rnum: item.rnum ?? '',
-    lstYmd: item.lstYmd,
-    lstPlace: item.lstPlace,
-    lstPrdtNm: item.prdtClNm
-  }));
+  return json.data.map((item) => {
+    // 분실물 목록 API는 물품명을 주지 않으므로 분류명에서 소분류를 이름으로 사용한다.
+    // "지갑 > 남성용 지갑" → 제목 "남성용 지갑" / 카테고리 라벨 "지갑"
+    const subName = item.prdtClNm?.includes('>')
+      ? item.prdtClNm.split('>').pop()?.trim()
+      : item.prdtClNm;
+
+    return {
+      atcId: item.atcId,
+      depPlace: '',
+      fdFilePathImg: DEFAULT_IMAGE,
+      fdPrdtNm: '',
+      fdSbjt: '',
+      fdSn: '',
+      fdYmd: '',
+      prdtClNm: item.prdtClNm,
+      rnum: item.rnum ?? '',
+      lstYmd: item.lstYmd,
+      lstPlace: item.lstPlace,
+      lstPrdtNm: subName || item.prdtClNm
+    };
+  });
 };

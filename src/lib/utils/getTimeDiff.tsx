@@ -2,8 +2,26 @@ interface timeProps {
   createdAt: string;
 }
 
+/**
+ * 백엔드는 타임존 표기 없는(naive) ISO 시각을 UTC로 내려준다.
+ * 타임존 지시자(Z, ±hh:mm)가 없으면 UTC로 간주하도록 'Z'를 붙인다.
+ */
+const normalizeToUtc = (value: string): string => {
+  if (!value) return value;
+  // 공백 구분("YYYY-MM-DD HH:mm")은 T 구분으로 통일
+  let v = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value)
+    ? value.replace(' ', 'T')
+    : value;
+  const hasTimeZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(v);
+  if (/T\d{2}:\d{2}/.test(v) && !hasTimeZone) {
+    v = `${v}Z`;
+  }
+  return v;
+};
+
 export const getTimeDiff = ({ createdAt }: timeProps) => {
-  const milliSeconds = new Date().getTime() - new Date(createdAt).getTime();
+  const milliSeconds =
+    new Date().getTime() - new Date(normalizeToUtc(createdAt)).getTime();
   const seconds = milliSeconds / 1000;
 
   if (seconds < 60) {

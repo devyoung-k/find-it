@@ -1,63 +1,27 @@
 import { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PasswordResetFormCard from '@/pages/account/components/password-change/PasswordResetFormCard';
-import { supabase } from '@/lib/api/supabaseClient';
+import { hasToken } from '@/lib/api/auth';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 
 const ResetPasswordPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const recoveryContext = useMemo(() => {
-    const hash = location.hash?.startsWith('#') ? location.hash.slice(1) : location.hash ?? '';
-    const hashParams = new URLSearchParams(hash);
-    const queryParams = new URLSearchParams(location.search);
-    const pick = (key: string) => hashParams.get(key) ?? queryParams.get(key);
+  const resetToken = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('token');
+  }, [location.search]);
 
-    return {
-      type: pick('type'),
-      accessToken: pick('access_token'),
-      refreshToken: pick('refresh_token'),
-      tokenHash: pick('token_hash'),
-      error: pick('error')
-    };
-  }, [location.hash, location.search]);
-
-  const hasRecoveryToken = Boolean(
-    recoveryContext.type === 'recovery' && (recoveryContext.accessToken || recoveryContext.tokenHash)
-  );
-  const hasRecoveryError = Boolean(recoveryContext.error);
-  const canRenderForm = hasRecoveryToken || hasRecoveryError;
+  const canRenderForm = Boolean(resetToken);
 
   useEffect(() => {
-    if (canRenderForm) {
-      return;
-    }
-
-    let isMounted = true;
-    const redirectBySession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!isMounted) return;
-      if (data.session) {
-        navigate('/', { replace: true });
-      } else {
-        navigate('/signin', { replace: true });
-      }
-    };
-
-    void redirectBySession();
-
-    return () => {
-      isMounted = false;
-    };
+    if (canRenderForm) return;
+    navigate(hasToken() ? '/' : '/signin', { replace: true });
   }, [canRenderForm, navigate]);
 
   useHeaderConfig(
-    () => ({
-      isShowPrev: true,
-      children: '비밀번호 재설정',
-      empty: true
-    }),
+    () => ({ isShowPrev: true, children: '비밀번호 재설정', empty: true }),
     []
   );
 
@@ -66,13 +30,13 @@ const ResetPasswordPage = () => {
   }
 
   return (
-    <div className="flex min-h-nav-safe w-full flex-col items-center bg-[#f8f8f8]">
+    <div className="min-h-nav-safe flex w-full flex-col items-center bg-white">
       <main
         id="main-content"
-        className="flex w-full flex-1 items-start justify-center px-4 pt-16 pb-24 md:pt-[18vh]"
+        className="flex w-full flex-1 items-start justify-center px-4 pt-12 pb-24"
       >
         <div className="w-full max-w-md">
-          <PasswordResetFormCard />
+          <PasswordResetFormCard token={resetToken as string} />
         </div>
       </main>
     </div>

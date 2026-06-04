@@ -1,274 +1,232 @@
-import { Link } from 'react-router-dom';
-import { getTimeDiff } from '@/lib/utils/getTimeDiff';
-import { Search, ChevronRight } from 'lucide-react';
-import * as React from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search, Box, Tag, Bell, ChevronRight } from 'lucide-react';
 import { useFoundItemsInfinite } from '@/entities/found/model/useFoundItemsInfinite';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Pagination, Autoplay } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/pagination';
-import { supabase } from '@/lib/api/supabaseClient';
-import { fetchProfileById } from '@/lib/api/profile';
-import { fetchRecentCommunityPosts } from '@/lib/api/community';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
-import { logger } from '@/lib/utils/logger';
-import formatDisplayDate from '@/lib/utils/formatDisplayDate';
-const { useState, useEffect } = React;
+import ItemBox from '@/entities/item/ui/ItemBox';
+import {
+  HOME_CATEGORY_CHIPS,
+  getCategoryMeta
+} from '@/shared/config/categoryMeta';
 
-// 유저 이름 렌더링
-interface ProfileBoxProps {
-  userName?: string;
-}
+/** 카테고리 바로가기 칩 (아이콘 + 라벨) */
+const CategoryShortcut = ({
+  label,
+  variant
+}: {
+  label: string;
+  variant: 'circle' | 'pill';
+}) => {
+  const { Icon, fg, bg } = getCategoryMeta(label);
 
-// 프로필 영역
-const ProfileBox = ({ userName = '방문자' }: ProfileBoxProps) => {
-  const targetName = userName || '방문자';
-  const profileName =
-    targetName.length > 5 ? `${targetName.slice(0, 4)}...` : targetName;
-
-  return (
-    <button className="flex-1 rounded-2xl bg-[#E3EFFF] p-6 text-left transition-colors hover:bg-[#d5e5ff] md:p-8">
-      <Link
-        to="/mypageentry"
-        className="block"
-        aria-label={`${profileName}님의 마이페이지로 이동`}
-      >
-        <div className="space-y-1">
-          <h3 className="text-[#1a1a1a]">{profileName}님</h3>
-          <p className="text-sm text-[#666]">안녕하세요!</p>
-        </div>
-      </Link>
-    </button>
-  );
-};
-
-const FindItemBox = () => {
-  return (
-    <button className="flex flex-1 flex-col items-center justify-center rounded-2xl bg-white p-6 transition-colors hover:bg-gray-50 md:p-8">
-      <Link
-        to="/searchfind"
-        className="w-full space-y-2 text-center"
-        aria-label="물품 찾기 페이지로 이동"
-      >
-        <h3 className="text-[#1a1a1a]">물품 찾기</h3>
-        <Search className="mx-auto h-8 w-8 text-[#1a1a1a]" />
-      </Link>
-    </button>
-  );
-};
-
-const CommunityBox: React.FC = () => {
-  const [posts, setPosts] = useState<
-    { id: string; title: string; created: string }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const data = await fetchRecentCommunityPosts(2);
-        setPosts(
-          data.map((item) => ({
-            id: item.id,
-            title: item.title,
-            created: item.created_at
-          }))
-        );
-      } catch (error) {
-        logger.error('자유게시판 데이터를 불러오지 못했습니다.', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetchPosts();
-  }, []);
-
-  return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-6 md:mt-8 md:p-8">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-[#1a1a1a]">자유게시판</h3>
-        <Link to="/postlist" aria-label="자유게시판 전체보기">
-          <ChevronRight className="h-5 w-5 text-[#1a1a1a]" />
-        </Link>
-      </div>
-      <div className="space-y-4">
-        {loading ? (
-          <p className="text-sm text-[#666]">게시물을 불러오는 중입니다...</p>
-        ) : posts.length === 0 ? (
-          <p className="text-sm text-[#999]">표시할 게시물이 없습니다.</p>
-        ) : (
-          posts.map((post) => (
-            <Link
-              key={post.id}
-              to={`/postdetail/${post.id}`}
-              className="-mx-2 flex items-center justify-between rounded-lg border-b border-gray-100 px-2 py-2 transition-colors hover:bg-gray-50"
-            >
-              <div className="flex-1">
-                <p className="text-[#1a1a1a]">{post.title || '–'}</p>
-              </div>
-              <span className="text-sm text-[#999]">
-                {getTimeDiff({ createdAt: post.created })}
-              </span>
-            </Link>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-const RecommendedItems: React.FC = () => {
-  const { data, isLoading } = useFoundItemsInfinite({
-    pageSize: 5,
-    query: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 30
-    }
-  });
-
-  const items = data?.pages?.flatMap((page) => page) ?? [];
-
-  if (isLoading) {
+  if (variant === 'pill') {
     return (
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm text-[#666]">추천을 찾아요!</span>
-          <Link
-            to="/getlist"
-            className="flex items-center transition-colors hover:text-[#4F7EFF]"
-          >
-            <span className="text-xs text-[#999]">전체보기</span>
-            <ChevronRight className="ml-1 h-4 w-4 text-[#999]" />
-          </Link>
-        </div>
-        <div className="mb-6 animate-pulse rounded-3xl bg-gradient-to-br from-[#4F7EFF] to-[#3B63E3] p-6 md:mb-8 md:p-8">
-          <div className="h-48"></div>
-        </div>
-      </div>
+      <Link
+        to={`/getlist?category=${encodeURIComponent(label)}`}
+        className="flex shrink-0 items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-primary hover:text-primary"
+      >
+        <Icon size={16} color={fg} strokeWidth={2} />
+        {label}
+      </Link>
     );
   }
 
   return (
-    <div>
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm text-[#666]">추천을 찾아요!</span>
-        <Link
-          to="/getlist"
-          className="flex items-center transition-colors hover:text-[#4F7EFF]"
-        >
-          <span className="text-xs text-[#999]">전체보기</span>
-          <ChevronRight className="ml-1 h-4 w-4 text-[#999]" />
-        </Link>
-      </div>
-
-      {items.length > 0 ? (
-        <Swiper
-          modules={[Pagination, Autoplay]}
-          spaceBetween={16}
-          slidesPerView={1}
-          pagination={{
-            clickable: true,
-            bulletClass: 'swiper-pagination-bullet !bg-white/50',
-            bulletActiveClass: 'swiper-pagination-bullet-active !bg-white'
-          }}
-          autoplay={{
-            delay: 5000,
-            disableOnInteraction: false
-          }}
-          loop={items.length > 1}
-          className="mb-6 md:mb-8"
-        >
-          {items.map((item) => (
-            <SwiperSlide key={item.atcId}>
-              <Link to={`/getlist/detail/${item.atcId}`} className="block">
-                <div className="rounded-3xl bg-linear-to-br from-[#5B82FF] to-[#4F7EFF] p-6 transition-shadow hover:shadow-lg md:p-8">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h2 className="mb-3 text-xl font-semibold text-white md:text-2xl">
-                        {item.fdPrdtNm.length > 12
-                          ? item.fdPrdtNm.slice(0, 12) + '...'
-                          : item.fdPrdtNm}
-                      </h2>
-                      <div className="mb-4 inline-block rounded-full bg-white/30 px-3 py-1 backdrop-blur-sm">
-                        <span className="text-xs font-medium text-white">
-                          {item.depPlace}
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-sm text-white/80">습득일자</p>
-                        <p className="font-medium text-white">
-                          {formatDisplayDate(item.fdYmd)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="ml-4 flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-white/20 backdrop-blur-sm">
-                      <img
-                        src={item.fdFilePathImg}
-                        alt={item.fdPrdtNm}
-                        className="h-full w-full rounded-2xl object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            </SwiperSlide>
-          ))}
-        </Swiper>
-      ) : (
-        <div className="mb-6 rounded-3xl bg-gradient-to-br from-[#5B82FF] to-[#4F7EFF] p-6 md:mb-8 md:p-8">
-          <p className="text-center text-white">등록된 습득물이 없습니다.</p>
-        </div>
-      )}
-    </div>
+    <Link
+      to={`/getlist?category=${encodeURIComponent(label)}`}
+      className="flex w-16 shrink-0 flex-col items-center gap-1.5"
+    >
+      <span
+        className="flex h-14 w-14 items-center justify-center rounded-2xl"
+        style={{ backgroundColor: bg }}
+      >
+        <Icon size={26} color={fg} strokeWidth={2} />
+      </span>
+      <span className="text-xs font-medium text-gray-600">{label}</span>
+    </Link>
   );
 };
 
+/** 키워드 알림 배너 */
+const KeywordBanner = () => (
+  <Link
+    to="/notification"
+    className="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-[#5B8DEF] to-[#4785FF] p-5 text-white shadow-sm transition-shadow hover:shadow-md"
+  >
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/25">
+      <Bell size={22} />
+    </span>
+    <div className="min-w-0 flex-1">
+      <p className="text-base font-bold">키워드 알림 받기</p>
+      <p className="mt-0.5 text-sm text-white/85">
+        찾는 물건을 등록하면 새 습득물을 바로 알려드려요
+      </p>
+    </div>
+    <ChevronRight size={22} className="shrink-0 text-white/80" />
+  </Link>
+);
+
 const Main = () => {
-  const [userNickname, setUserNickname] = useState('방문자');
+  const navigate = useNavigate();
+  const { data, isLoading } = useFoundItemsInfinite({
+    pageSize: 8,
+    query: { staleTime: 1000 * 60 * 5, gcTime: 1000 * 60 * 30 }
+  });
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (!user) return;
+  const items = (data?.pages?.flatMap((page) => page) ?? []).slice(0, 8);
 
-      try {
-        const profileData = await fetchProfileById(user.id);
-        if (profileData?.nickname) {
-          setUserNickname(profileData.nickname);
-        } else if (user.email) {
-          setUserNickname(user.email);
-        }
-      } catch (error) {
-        logger.error('사용자 정보를 불러오지 못했습니다.', error);
-      }
-    };
+  useHeaderConfig(() => ({ isShowLogo: true }), []);
 
-    void loadProfile();
-  }, []);
+  const goSearch = () => navigate('/searchfind');
 
-  useHeaderConfig(
-    () => ({
-      isShowLogo: true
-    }),
-    []
+  const recentSection = (
+    <section className="mx-auto w-full max-w-[1280px] px-4 md:px-6">
+      <div className="mb-4 flex items-end justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">방금 등록된 습득물</h2>
+          <p className="mt-0.5 text-sm text-gray-450">
+            가장 최근 접수된 물건이에요
+          </p>
+        </div>
+        <Link
+          to="/getlist"
+          className="flex shrink-0 items-center text-sm text-gray-450 hover:text-primary"
+        >
+          전체보기 <ChevronRight size={16} />
+        </Link>
+      </div>
+
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-[230px] animate-pulse rounded-2xl bg-gray-100"
+            />
+          ))}
+        </div>
+      ) : items.length > 0 ? (
+        <>
+          {/* 모바일: 가로 스크롤 */}
+          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 md:hidden">
+            {items.map((item, i) => (
+              <div key={`${item.atcId}-${i}`} className="w-[150px] shrink-0">
+                <ItemBox item={item} itemType="get" layout="card" />
+              </div>
+            ))}
+          </div>
+          {/* 데스크탑: 그리드 */}
+          <div className="hidden grid-cols-4 gap-4 md:grid">
+            {items.map((item, i) => (
+              <ItemBox
+                key={`${item.atcId}-${i}`}
+                item={item}
+                itemType="get"
+                layout="card"
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="rounded-2xl bg-gray-50 py-10 text-center text-sm text-gray-400">
+          등록된 습득물이 없습니다.
+        </p>
+      )}
+    </section>
   );
 
   return (
-    <div className="min-h-nav-safe flex flex-col bg-[#f8f8f8]">
-      <main className="flex-1 pb-20 md:pb-8">
-        <div className="mx-auto max-w-7xl px-4 py-6 md:py-8">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
-            <ProfileBox userName={userNickname} />
-            <FindItemBox />
-            <RecommendedItems />
-            <div className="space-y-6 md:space-y-8">
-              <CommunityBox />
-            </div>
+    <div className="min-h-nav-safe bg-white pb-10">
+      {/* ===== 데스크탑 히어로 ===== */}
+      <section className="hidden bg-gradient-to-b from-[#EAF2FF] to-white py-14 md:block">
+        <div className="mx-auto max-w-[760px] px-6 text-center">
+          <h1 className="text-[34px] leading-tight font-extrabold text-gray-900">
+            잃어버린 소중함,
+            <br />
+            찾아줘가 한 번에 찾아드려요
+          </h1>
+          <p className="mt-4 text-[15px] text-gray-500">
+            전국 유실물을 한 곳에서 검색하고, 키워드 알림으로 놓치지 마세요
+          </p>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              goSearch();
+            }}
+            className="mx-auto mt-7 flex max-w-[560px] items-center gap-2 rounded-full border border-gray-200 bg-white p-1.5 pl-5 shadow-sm"
+          >
+            <Search size={20} className="shrink-0 text-gray-350" />
+            <input
+              type="text"
+              readOnly
+              onFocus={goSearch}
+              placeholder="어떤 물건을 찾고 있나요?"
+              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-350"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+            >
+              검색
+            </button>
+          </form>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {HOME_CATEGORY_CHIPS.map((label) => (
+              <CategoryShortcut key={label} label={label} variant="pill" />
+            ))}
           </div>
         </div>
-      </main>
+      </section>
+
+      {/* ===== 모바일 상단 ===== */}
+      <section className="px-4 pt-3 md:hidden">
+        <button
+          type="button"
+          onClick={goSearch}
+          className="flex w-full items-center gap-2.5 rounded-2xl bg-gray-100 px-4 py-3.5 text-left text-gray-400"
+        >
+          <Search size={20} />
+          <span className="text-[15px]">어떤 물건을 찾고 있나요?</span>
+        </button>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Link
+            to="/getlist"
+            className="rounded-2xl bg-[#EAF1FF] p-4 transition-colors active:bg-[#dde9ff]"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white">
+              <Box size={22} className="text-primary" />
+            </span>
+            <p className="mt-3 text-[15px] font-bold text-gray-900">습득물 찾기</p>
+            <p className="mt-0.5 text-xs text-gray-500">누가 보관 중인 물건</p>
+          </Link>
+          <Link
+            to="/lostlist"
+            className="rounded-2xl bg-[#FFEDE9] p-4 transition-colors active:bg-[#ffe0d9]"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white">
+              <Tag size={22} className="text-secondary" />
+            </span>
+            <p className="mt-3 text-[15px] font-bold text-gray-900">분실물 보기</p>
+            <p className="mt-0.5 text-xs text-gray-500">누군가 잃어버린 물건</p>
+          </Link>
+        </div>
+
+        <div className="-mx-4 mt-5 flex gap-3 overflow-x-auto px-4 pb-1">
+          {HOME_CATEGORY_CHIPS.map((label) => (
+            <CategoryShortcut key={label} label={label} variant="circle" />
+          ))}
+        </div>
+      </section>
+
+      {/* ===== 최근 습득물 ===== */}
+      <div className="mt-6 md:mt-10">{recentSection}</div>
+
+      {/* ===== 키워드 배너 ===== */}
+      <div className="mx-auto mt-6 w-full max-w-[1280px] px-4 md:mt-10 md:px-6">
+        <KeywordBanner />
+      </div>
     </div>
   );
 };

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllData } from '@/lib/utils/getAPIData';
-import { GetDetailData } from '@/types/types';
+import { Bell, ChevronRight } from 'lucide-react';
+import { getFoundItems } from '@/entities/found/api/getFoundItems';
+import { AllData } from '@/types/types';
 import none_alarm from '@/assets/none_alarm.svg';
-import icon_next from '@/assets/icons/icon_next.svg';
-import { supabase } from '@/lib/api/supabaseClient';
-import { logger } from '@/lib/utils/logger';
+import { useAuthStore } from '@/features/auth/model/authStore';
+
 interface KeywordType {
   keywords: string;
 }
@@ -17,148 +17,105 @@ interface RecommendationType {
 
 const Notice = () => {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const [userKeyword, setUserKeyword] = useState<KeywordType | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationType[]>(
     () => {
-      if (typeof window === 'undefined') {
-        return [];
-      }
-      const savedRecommendations = window.localStorage.getItem('recommendations');
-      return savedRecommendations ? JSON.parse(savedRecommendations) : [];
+      if (typeof window === 'undefined') return [];
+      const saved = window.localStorage.getItem('recommendations');
+      return saved ? JSON.parse(saved) : [];
     }
   );
 
   useEffect(() => {
-    const fetchUserKeyword = async () => {
-      if (typeof window === 'undefined') {
-        return;
-      }
-
-      try {
-        const { data } = await supabase.auth.getUser();
-        const user = data.user;
-        if (!user) return;
-
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('keywords')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          throw error;
-        }
-
-        if (profile) {
-          setUserKeyword({
-            keywords: profile.keywords ?? '',
-          });
-        }
-      } catch (error) {
-        logger.error('사용자 키워드를 불러오지 못했습니다.', error);
-      }
-    };
-    fetchUserKeyword();
-  }, []);
+    if (user) setUserKeyword({ keywords: user.keywords ?? '' });
+  }, [user]);
 
   useEffect(() => {
     const fetchPosts = async () => {
-      // 등록된 키워드가 있을 경우, 최근 습득물 데이터 가져오기
-      if (userKeyword) {
-        const keywordsArray = userKeyword.keywords.split(', ').filter((k) => k);
-        const data = await getAllData({ numOfRows: 100 });
+      if (!userKeyword) return;
+      const keywordsArray = userKeyword.keywords.split(', ').filter((k) => k);
+      const data: AllData[] = await getFoundItems(0, 100);
+      const recentItemData = data.map(
+        (item) => `${item.fdPrdtNm}^${item.atcId}`
+      );
 
-        // 최근 습득물 데이터 중 키워드와 일치하는 데이터 (물품명, ID) 추출
-        const recentItemData = (data as GetDetailData[] | null)?.map((item) => `${item.fdPrdtNm}^${item.atcId}`) ?? [];
+      const newRecommendations = keywordsArray
+        .map((keyword) => {
+          const filteredItems = recentItemData.filter((item) =>
+            item.includes(keyword)
+          );
+          if (filteredItems.length > 0) {
+            const randomIndex = Math.floor(Math.random() * filteredItems.length);
+            return { keyword, selectedItem: filteredItems[randomIndex] };
+          }
+          return null;
+        })
+        .filter((item): item is RecommendationType => item !== null);
 
-        // 추출한 데이터 중 랜덤으로 추천하기
-        const newRecommendations = keywordsArray
-          .map((keyword) => {
-            const filteredItems = recentItemData.filter((item) =>
-              item.includes(keyword)
+      if (newRecommendations.length > 0) {
+        setRecommendations((prev) => {
+          const updated = [...prev, ...newRecommendations];
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(
+              'recommendations',
+              JSON.stringify(updated)
             );
-            if (filteredItems.length > 0) {
-              const randomIndex = Math.floor(
-                Math.random() * filteredItems.length
-              );
-              const selectedItem = filteredItems[randomIndex];
-              return { keyword, selectedItem };
-            }
-            return null;
-          })
-          .filter((item) => item !== null);
-
-        // 추천 데이터가 있을 경우, 로컬스토리지에 저장
-        if (newRecommendations.length > 0) {
-          setRecommendations((prevRecommendations) => {
-            const updatedRecommendations = [
-              ...prevRecommendations,
-              ...newRecommendations,
-            ];
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(
-                'recommendations',
-                JSON.stringify(updatedRecommendations)
-              );
-            }
-            return updatedRecommendations;
-          });
-        }
+          }
+          return updated;
+        });
       }
     };
     fetchPosts();
-
-    // 1시간마다 키워드 추천 알림
     const interval = setInterval(fetchPosts, 30000);
     return () => clearInterval(interval);
   }, [userKeyword]);
 
-  // 추천 알림 클릭 -> 상세 페이지 이동 및 로컬 삭제
   const handleButton = (index: number) => {
     navigate(
       `/getlist/detail/${recommendations[index].selectedItem.split('^')[1]}`
     );
-
-    const updatedRecommendations = recommendations.filter(
-      (_, i) => i !== index
-    );
+    const updated = recommendations.filter((_, i) => i !== index);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(
-        'recommendations',
-        JSON.stringify(updatedRecommendations)
-      );
+      window.localStorage.setItem('recommendations', JSON.stringify(updated));
     }
-    setRecommendations(updatedRecommendations);
+    setRecommendations(updated);
   };
 
-  const noneAlarmImage = (
-    <img
-      src={none_alarm}
-      alt="새로운 알림이 없습니다."
-      className="mx-auto mt-[90px]"
-    />
-  );
+  if (recommendations.length === 0) {
+    return (
+      <div className="flex flex-col items-center pt-16">
+        <img src={none_alarm} alt="" className="w-28 opacity-90" />
+        <p className="mt-4 text-sm text-gray-400">새로운 알림이 없습니다.</p>
+      </div>
+    );
+  }
 
-  const alarmList = (
-    <ul className="">
+  return (
+    <ul className="divide-y divide-gray-50">
       {recommendations.map((recommendation, index) => (
-        <li key={index} className="pb-[25px] text-sm">
+        <li key={index}>
           <button
-            className="flex w-full justify-between"
+            type="button"
             onClick={() => handleButton(index)}
+            className="flex w-full items-start gap-3 py-4 text-left active:bg-gray-50"
           >
-            <span>[{recommendation.keyword}] 관련 습득물을 확인해보세요</span>
-            <img src={icon_next} alt="관련 글 확인하기" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF1FF]">
+              <Bell size={18} className="text-primary" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <span className="inline-flex rounded-md bg-[#E8F0FF] px-2 py-0.5 text-[11px] font-bold text-primary">
+                {recommendation.keyword}
+              </span>
+              <p className="mt-1.5 text-sm text-gray-700">
+                등록한 키워드와 일치하는 습득물이 새로 등록되었어요
+              </p>
+            </div>
+            <ChevronRight size={18} className="mt-2 shrink-0 text-gray-300" />
           </button>
         </li>
       ))}
     </ul>
-  );
-
-  return (
-    <div className="w-[375px] px-[30px] pt-[40px]">
-      {recommendations.length === 0 ? noneAlarmImage : alarmList}
-    </div>
   );
 };
 
