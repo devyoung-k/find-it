@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://15.164.218.185:8080/api/$1"
+      "destination": "https://findit-api.devyoung.dev/api/$1"
     },
     {
       "source": "/(.*)",
