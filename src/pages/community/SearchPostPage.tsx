@@ -1,39 +1,30 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
 import { getTimeDiff } from '@/lib/utils/getTimeDiff';
-import Horizon from '@/shared/ui/layout/Horizon';
-import {
-  searchCommunityPosts,
-  CommunityPost
-} from '@/lib/api/community';
+import { searchCommunityPosts, CommunityPost } from '@/lib/api/community';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
+import PostTagBadge from '@/shared/ui/PostTagBadge';
 
 const SearchPost = () => {
   const [inputValue, setInputValue] = useState('');
   const [data, setData] = useState<CommunityPost[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
   const [showNoResult, setShowNoResult] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const inputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const thisValue = e.target.value;
-    setInputValue(thisValue);
-  };
-
   const submitInput = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     try {
-      e.preventDefault();
       if (inputValue.trim() !== '') {
-        const sanitizedInput = inputValue.trim().replace(/"/g, '\\"');
-        const data = await searchCommunityPosts(sanitizedInput);
-        setData(data);
-        setInputValue('');
-        setShowNoResult(data.length === 0);
+        const sanitized = inputValue.trim().replace(/"/g, '\\"');
+        const result = await searchCommunityPosts(sanitized);
+        setData(result);
+        setShowNoResult(result.length === 0);
       } else {
         setData([]);
         setShowNoResult(false);
@@ -42,66 +33,61 @@ const SearchPost = () => {
       logger.error('게시물 검색 통신 에러', error);
     }
   };
-  const SearchResult = (
-    <>
-      {data.map((item: CommunityPost, index: number) => (
-        <div key={item.id} className="w-full">
-          <Link to={`/postdetail/${item.id}`}>
-            <section className="relative mx-auto my-0 h-40 w-full max-w-3xl px-4 pt-2.5">
-              {getTimeDiff({ createdAt: data[index].created_at })}
-              <h1 className="truncate pt-2 text-base text-black">
-                {item.title}
-              </h1>
-              <span className="w-full pt-2 text-xs whitespace-normal text-gray-700">
-                {(item.content.length > 64 &&
-                  item.content.slice(0, 64) + '...') ||
-                  item.content}
-              </span>
-              <span className="text-gray-450 absolute bottom-3.5 block text-xs">
-                #{item.tag ?? ''}
-              </span>
-            </section>
-          </Link>
-          <div className="mx-auto my-0 h-2.5 w-full border-t border-t-gray-300 bg-gray-200" />
-        </div>
-      ))}
-    </>
-  );
 
-  const NoResult = (
-    <div className="pt-5 text-center">검색 결과가 없습니다.</div>
-  );
   useHeaderConfig(
-    () => ({
-      isShowPrev: true,
-      children: '게시물 검색',
-      empty: true
-    }),
+    () => ({ isShowPrev: true, children: '게시물 검색', empty: true }),
     []
   );
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white">
-      <Horizon lineBold="bold" lineWidth="long" />
-
-      <div className="mx-auto w-full max-w-7xl flex-1 overflow-auto">
-        <form
-          className="flex items-center justify-center px-4 py-4"
-          onSubmit={submitInput}
-        >
-          <input
-            ref={inputRef}
-            type="search"
-            value={inputValue}
-            onChange={inputChange}
-            className="w-full max-w-md appearance-none rounded-full px-5 py-2 text-base outline-none"
-            style={{ border: '1px solid #bcbcbc' }}
-            placeholder="검색어 입력 후 Enter"
-          />
+    <div className="min-h-nav-safe bg-white">
+      <div className="mx-auto w-full max-w-[800px] px-4 pt-4 pb-24 md:px-6 md:pt-6">
+        <form onSubmit={submitInput}>
+          <div className="flex items-center gap-2.5 rounded-full bg-gray-100 px-4 py-3">
+            <Search size={20} className="shrink-0 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="search"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="게시물 검색"
+              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
+            />
+          </div>
         </form>
 
-        <div className="w-full pb-20 md:pb-8">
-          {data.length > 0 ? SearchResult : showNoResult && NoResult}
+        <div className="mt-2">
+          {data.length > 0 ? (
+            data.map((post) => (
+              <Link
+                key={post.id}
+                to={`/postdetail/${post.id}`}
+                className="block border-b border-gray-100 py-4 active:bg-gray-50"
+              >
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <PostTagBadge tag={post.tag} />
+                  <span className="font-medium text-gray-600">
+                    {post.author_nickname || '익명'}
+                  </span>
+                  <span>· {getTimeDiff({ createdAt: post.created_at })}</span>
+                </div>
+                <h3 className="mt-1.5 truncate text-[16px] font-bold text-gray-900">
+                  {post.title}
+                </h3>
+                <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-gray-500">
+                  {post.content}
+                </p>
+              </Link>
+            ))
+          ) : showNoResult ? (
+            <p className="py-16 text-center text-sm text-gray-400">
+              검색 결과가 없습니다.
+            </p>
+          ) : (
+            <p className="py-16 text-center text-sm text-gray-400">
+              검색어를 입력해 주세요.
+            </p>
+          )}
         </div>
       </div>
     </div>

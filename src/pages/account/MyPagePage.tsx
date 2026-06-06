@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/api/supabaseClient';
-import {
-  fetchProfileById,
-  Profile as SupabaseProfile
-} from '@/lib/api/profile';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-
-import profile from '@/assets/profile.svg';
-import { Bookmark, FileText, Mail, Search, Bell, Edit2 } from 'lucide-react';
+import {
+  Bell,
+  Bookmark,
+  FileText,
+  Tag,
+  Settings,
+  Info,
+  ChevronRight,
+  LogOut
+} from 'lucide-react';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import { fetchRecentCommunityPosts } from '@/lib/api/community';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
 
@@ -20,226 +24,193 @@ declare global {
   }
 }
 
-type AuthUserInfo = Pick<
-  SupabaseProfile,
-  'id' | 'nickname' | 'email' | 'avatar_url' | 'state' | 'city'
->;
-
-// 서비스 준비 알럿
-const showAlert = () => {
-  alert('서비스 준비 중이에요, 조금만 기다려주세요! 😀');
-};
+const showAlert = () => alert('서비스 준비 중이에요, 조금만 기다려주세요! 😀');
 
 const MyPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [userInfo, setUserInfo] = useState<AuthUserInfo | null>(null);
-  const [hasRecommendationAlert, setHasRecommendationAlert] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const status = useAuthStore((s) => s.status);
+  const logout = useAuthStore((s) => s.logout);
+  const [postCount, setPostCount] = useState(0);
 
+  // 인증 상태 확정 후 비로그인이면 로그인 페이지로
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (status === 'guest') {
+      navigate('/signin');
+    }
+  }, [status, navigate]);
 
-    const loadProfile = async () => {
-      const { data } = await supabase.auth.getUser();
-      const authUser = data.user;
-      if (!authUser) return;
-
+  // 내가 쓴 글 수 (최근글 중 작성자 일치 개수 근사)
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    (async () => {
       try {
-        const profileData = await fetchProfileById(authUser.id);
-        if (profileData) {
-          setUserInfo({
-            id: profileData.id,
-            nickname: profileData.nickname ?? '',
-            email: profileData.email ?? authUser.email ?? '',
-            avatar_url: profileData.avatar_url ?? null,
-            state: profileData.state,
-            city: profileData.city
-          });
-        } else {
-          setUserInfo({
-            id: authUser.id,
-            nickname: authUser.email ?? '사용자',
-            email: authUser.email ?? '',
-            avatar_url: null,
-            state: null,
-            city: null
-          });
+        const posts = await fetchRecentCommunityPosts(100);
+        if (mounted) {
+          setPostCount(posts.filter((p) => p.author_id === user.id).length);
         }
       } catch (error) {
-        logger.error('프로필 정보를 불러오지 못했습니다.', error);
+        logger.warn('내 글 수를 불러오지 못했습니다.', error);
       }
+    })();
+    return () => {
+      mounted = false;
     };
-
-    void loadProfile();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const script = document.createElement('script');
     script.async = true;
     script.src = 'https://embed.tawk.to/65eeb6d69131ed19d977bab0/1hom7kdu6';
     script.setAttribute('crossorigin', '*');
-
     document.body.appendChild(script);
 
-    const hideTawkToWidget = () => {
-      if (window.Tawk_API) {
-        window.Tawk_API.hideWidget();
-      }
-    };
-
-    const showTawkToWidget = () => {
-      if (window.Tawk_API) {
-        window.Tawk_API.showWidget();
-      }
-    };
-
-    if (location.pathname !== '/mypageentry') {
-      hideTawkToWidget();
-    } else {
-      showTawkToWidget();
-    }
-
-    return hideTawkToWidget;
+    const hideTawk = () => window.Tawk_API?.hideWidget();
+    if (location.pathname !== '/mypageentry') hideTawk();
+    else window.Tawk_API?.showWidget();
+    return hideTawk;
   }, [location]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      const saved = window.localStorage.getItem('recommendations');
-      if (!saved || saved === '[]') {
-        setHasRecommendationAlert(false);
-      } else {
-        setHasRecommendationAlert(true);
-      }
-    } catch (error) {
-      logger.warn('Failed to read recommendations', error);
-      setHasRecommendationAlert(false);
-    }
-  }, []);
 
   const handleLogout = () => {
     void (async () => {
-      await supabase.auth.signOut();
-      window.location.href = '/';
+      await logout();
+      navigate('/');
     })();
   };
 
-  useHeaderConfig(
-    () => ({
-      isShowPrev: true,
-      children: '마이페이지',
-      empty: true
-    }),
-    []
-  );
+  useHeaderConfig(() => ({ children: 'MY' }), []);
 
-  const avatarSrc = userInfo?.avatar_url || profile;
-
-  const actionButtons = [
-    { label: '북마크 관리', icon: Bookmark, onClick: showAlert },
-    { label: '게시글 관리', icon: FileText, onClick: showAlert },
-    { label: '받은 쪽지함', icon: Mail, onClick: showAlert },
-    { label: '검색 범위 설정', icon: Search, onClick: showAlert }
-  ];
-
-  if (!userInfo) {
+  if (!user) {
     return (
-      <div className="min-h-nav-safe flex items-center justify-center text-sm text-gray-500">
+      <div className="min-h-nav-safe flex items-center justify-center text-sm text-gray-400">
         사용자 정보를 불러오는 중입니다...
       </div>
     );
   }
 
-  const secondaryLinks = [
-    { label: '공지사항', path: '/notice' },
-    { label: '만든 사람들', path: '/credit' }
+  const nickname = user.nickname || user.email?.split('@')[0] || '회원';
+  const avatarInitial = nickname.charAt(0) || '나';
+  const keywordCount = (user.keywords ?? '')
+    .split(/[,\s]+/)
+    .filter(Boolean).length;
+
+  const stats = [
+    { label: '북마크', value: 0 },
+    { label: '키워드', value: keywordCount },
+    { label: '내 글', value: postCount }
   ];
 
+  type MenuItem = {
+    label: string;
+    icon: typeof Bell;
+    count?: string;
+    onClick: () => void;
+  };
+
+  const primaryMenu: MenuItem[] = [
+    {
+      label: '키워드 알림',
+      icon: Bell,
+      count: `${keywordCount}개`,
+      onClick: () => navigate('/notification')
+    },
+    { label: '북마크한 물건', icon: Bookmark, count: '0개', onClick: showAlert },
+    {
+      label: '내가 쓴 글',
+      icon: FileText,
+      count: `${postCount}개`,
+      onClick: showAlert
+    },
+    { label: '분실물 등록하기', icon: Tag, onClick: showAlert }
+  ];
+
+  const secondaryMenu: MenuItem[] = [
+    { label: '알림 설정', icon: Settings, onClick: showAlert },
+    { label: '공지사항', icon: Info, onClick: () => navigate('/notice') }
+  ];
+
+  const MenuRow = ({ item }: { item: MenuItem }) => {
+    const Icon = item.icon;
+    return (
+      <button
+        type="button"
+        onClick={item.onClick}
+        className="flex w-full items-center gap-3 rounded-2xl bg-gray-50 px-4 py-4 text-left transition-colors hover:bg-gray-100"
+      >
+        <Icon size={20} className="shrink-0 text-gray-500" />
+        <span className="flex-1 text-[15px] font-medium text-gray-800">
+          {item.label}
+        </span>
+        {item.count && (
+          <span className="text-sm text-gray-400">{item.count}</span>
+        )}
+        <ChevronRight size={18} className="text-gray-300" />
+      </button>
+    );
+  };
+
   return (
-    <div className="min-h-nav-safe w-full bg-gray-50">
-      <div className="mx-auto max-w-4xl px-4 py-6 md:py-10">
-        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm md:p-8">
-          <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
-            <div className="relative">
-              <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-gray-100 bg-white md:h-32 md:w-32">
-                <img
-                  src={avatarSrc}
-                  alt="나의 프로필 사진"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 text-center md:text-left">
-              <div className="mb-2 flex items-center justify-center gap-2 md:justify-start">
-                <h2 className="text-lg font-semibold text-[#1a1a1a]">
-                  {userInfo.nickname || '사용자'}
-                </h2>
-                <Link
-                  to="/mypageedit"
-                  className="rounded p-1 transition-colors hover:bg-gray-100"
-                >
-                  <Edit2 className="h-4 w-4 text-[#4F7EFF]" />
-                </Link>
-              </div>
-              <p className="mb-4 text-sm text-[#666]">{userInfo.email || '-'}</p>
-              <p className="text-xs text-gray-500">
-                {userInfo.state && userInfo.city
-                  ? `${userInfo.state} ${userInfo.city}`
-                  : '등록된 지역 정보가 없습니다.'}
-              </p>
-            </div>
+    <div className="min-h-nav-safe bg-white">
+      <div className="mx-auto w-full max-w-[800px] px-4 pt-4 pb-10 md:px-6 md:pt-8">
+        {/* 프로필 카드 */}
+        <section className="flex items-center gap-4 rounded-2xl border border-gray-100 p-5">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-xl font-bold text-white">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt="프로필"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              avatarInitial
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-lg font-bold text-gray-900">{nickname}</p>
+            <p className="truncate text-sm text-gray-400">{user.email || '-'}</p>
           </div>
+          <Link
+            to="/mypageedit"
+            className="shrink-0 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            편집
+          </Link>
         </section>
 
-        <section className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-6">
-          {actionButtons.map(({ label, icon: Icon, onClick }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={onClick}
-              className="flex items-center gap-4 rounded-2xl bg-white p-4 text-left text-[#1a1a1a] transition-all hover:shadow-md md:p-6"
-            >
-              <Icon className="h-6 w-6 text-[#4F7EFF]" />
-              <span>{label}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => navigate('/notification')}
-            className="flex items-center gap-4 rounded-2xl bg-white p-4 text-left text-[#1a1a1a] transition-all hover:shadow-md md:col-span-2 md:p-6"
-          >
-            <div className="relative">
-              <Bell className="h-6 w-6 text-[#4F7EFF]" />
-              {hasRecommendationAlert && (
-                <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
-              )}
+        {/* 통계 */}
+        <section className="mt-3 grid grid-cols-3 divide-x divide-gray-100 rounded-2xl bg-gray-50 py-4">
+          {stats.map((s) => (
+            <div key={s.label} className="text-center">
+              <p className="text-xl font-extrabold text-primary">{s.value}</p>
+              <p className="mt-0.5 text-xs text-gray-500">{s.label}</p>
             </div>
-            <span>키워드 알림</span>
-          </button>
+          ))}
         </section>
 
-        <section className="space-y-2 md:space-y-3">
-          {secondaryLinks.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => navigate(item.path)}
-              className="w-full rounded-lg px-4 py-3 text-left text-[#666] transition-colors hover:bg-white/60"
-            >
-              {item.label}
-            </button>
+        {/* 메뉴 */}
+        <section className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {primaryMenu.map((item) => (
+            <MenuRow key={item.label} item={item} />
           ))}
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full rounded-lg px-4 py-3 text-left text-[#666] transition-colors hover:bg-white/60"
-          >
-            로그아웃
-          </button>
         </section>
+
+        <section className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          {secondaryMenu.map((item) => (
+            <MenuRow key={item.label} item={item} />
+          ))}
+        </section>
+
+        {/* 로그아웃 */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="mt-6 flex items-center gap-2 px-1 text-sm text-gray-400 transition-colors hover:text-gray-600"
+        >
+          <LogOut size={16} />
+          로그아웃
+        </button>
       </div>
     </div>
   );

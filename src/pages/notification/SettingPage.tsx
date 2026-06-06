@@ -1,179 +1,134 @@
-import { useState, useEffect } from 'react';
-import Horizon from '@/shared/ui/layout/Horizon';
-import icon_delete from '@/assets/icons/icon_delete.svg';
+import { useState } from 'react';
+import { Bell, X } from 'lucide-react';
 import ModalComp from '@/shared/ui/modal/ModalComp';
-import { supabase } from '@/lib/api/supabaseClient';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import { updateProfile } from '@/lib/api/profile';
 import { logger } from '@/lib/utils/logger';
 
-interface KeywordType {
-  keywords: string;
-}
-
-interface KeywordProps {
+const Keyword = ({
+  keyword,
+  onDelete
+}: {
   keyword: string;
   onDelete: (keyword: string) => void;
-}
-
-const Keyword = ({ keyword, onDelete }: KeywordProps) => {
-  return (
-    <div id={keyword} className="relative">
-      <div className="inline rounded-full border border-primary bg-white px-5 py-1 text-xs text-primary">
-        {keyword}
-      </div>
-      <button
-        className="absolute right-0 top-[-2px] size-3"
-        onClick={() => onDelete(keyword)}
-      >
-        <img src={icon_delete} alt="등록된 키워드 삭제하기" />
-      </button>
-    </div>
-  );
-};
+}) => (
+  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EAF1FF] py-1.5 pr-2 pl-3.5 text-sm font-medium text-primary">
+    {keyword}
+    <button
+      type="button"
+      onClick={() => onDelete(keyword)}
+      aria-label={`${keyword} 삭제`}
+      className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/15"
+    >
+      <X size={11} />
+    </button>
+  </span>
+);
 
 const Setting = () => {
-  const [userKeyword, setUserKeyword] = useState<KeywordType>({ keywords: '' });
-  const [userId, setUserId] = useState<string | null>(null);
-  const keywordsArray = userKeyword.keywords.split(', ').filter((k) => k);
+  const user = useAuthStore((s) => s.user);
+  const patchUser = useAuthStore((s) => s.patchUser);
+  const [inputValue, setInputValue] = useState('');
   const [isCountModal, setIsCountModal] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
+
+  const keywordsArray = (user?.keywords ?? '')
+    .split(/[,]\s*/)
+    .filter(Boolean);
 
   const onClickConfirm = () => {
     setIsCountModal(false);
     setIsDuplicate(false);
   };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        const user = data.user;
-        if (!user) return;
-        setUserId(user.id);
+  const persist = async (next: string[]) => {
+    if (!user) return;
+    const joined = next.join(', ');
+    patchUser({ keywords: joined });
+    try {
+      await updateProfile(user.id, { keywords: joined });
+    } catch (error) {
+      logger.error('키워드 저장 실패', error);
+    }
+  };
 
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('keywords')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          throw error;
-        }
-
-        if (profile) {
-          setUserKeyword({
-            keywords: profile.keywords ?? '',
-          });
-        }
-      } catch (error) {
-        logger.error('사용자 키워드를 불러오지 못했습니다.', error);
-      }
-    })();
-  }, []);
-
-  const handleAddButton = async () => {
-    const keywordInput = document.getElementById(
-      'keywordInput'
-    ) as HTMLInputElement;
-    const newKeyword = keywordInput.value.trim();
-
-    // 키워드 갯수 제한 모달
+  const handleAddButton = () => {
+    const newKeyword = inputValue.trim();
+    if (!newKeyword) return;
+    if (!user) {
+      alert('로그인 후 이용해주세요.');
+      return;
+    }
     if (keywordsArray.length >= 10) {
       setIsCountModal(true);
-      keywordInput.value = '';
+      setInputValue('');
       return;
     }
-
-    // 키워드 중복 제한 모달
-    if (keywordsArray.includes(keywordInput.value)) {
+    if (keywordsArray.includes(newKeyword)) {
       setIsDuplicate(true);
-      keywordInput.value = '';
+      setInputValue('');
       return;
     }
-
-    // pb에 키워드 업데이트
-    if (newKeyword && userId) {
-      const updateKeyword = userKeyword.keywords
-        ? `${userKeyword.keywords}, ${newKeyword}`
-        : newKeyword;
-
-      const data = {
-        keywords: updateKeyword,
-      };
-      await supabase.from('profiles').update(data).eq('id', userId);
-
-      setUserKeyword({ keywords: updateKeyword });
-      keywordInput.value = '';
-    } else if (!userId) {
-      alert('로그인 후 이용해주세요.');
-    }
+    void persist([...keywordsArray, newKeyword]);
+    setInputValue('');
   };
 
   const handleClearButton = (keywordToDelete: string) => {
-    const updatedKeywords = userKeyword.keywords
-      .split(', ')
-      .filter((keyword) => keyword !== keywordToDelete)
-      .join(', ');
-
-    setUserKeyword({ keywords: updatedKeywords });
-    if (userId) {
-      void supabase
-        .from('profiles')
-        .update({
-          keywords: updatedKeywords,
-        })
-        .eq('id', userId);
-    }
-
-    // 로컬 스토리지에서 키워드 삭제
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(keywordToDelete);
-    }
+    void persist(keywordsArray.filter((k) => k !== keywordToDelete));
   };
 
-  const noKeywordMessage = (
-    <span className="w-full pt-5 text-center text-sm text-gray-450">
-      등록된 키워드가 없습니다.
-    </span>
-  );
-
   return (
-    <div className="flex flex-col items-center p-[30px]">
-      <fieldset className="pb-[30px]">
-        <legend className="hidden">검색 폼</legend>
-        <div className="flex gap-3">
-          <input
-            id="keywordInput"
-            type="text"
-            placeholder="알림 받을 키워드를 입력해주세요."
-            className="h-[32px] w-[240px] rounded-full border-[1px] border-gray-350 px-5 text-xs"
-          />
-          <button
-            type="submit"
-            className="w-[63px] rounded-full bg-primary px-5 py-[7px] text-xs text-white"
-            onClick={handleAddButton}
-          >
-            추가
-          </button>
-        </div>
-      </fieldset>
+    <div>
+      {/* 안내 배너 */}
+      <div className="flex gap-3 rounded-2xl bg-[#EAF1FF] p-4">
+        <Bell size={20} className="mt-0.5 shrink-0 text-primary" />
+        <p className="text-sm leading-relaxed text-gray-600">
+          찾는 물건의 키워드를 등록하면, 새 습득물이 올라올 때마다 바로 알림을
+          보내드려요. <span className="font-bold text-primary">최대 10개</span>
+          까지 등록할 수 있어요.
+        </p>
+      </div>
 
-      <Horizon lineBold="thin" lineWidth="short" />
+      {/* 입력 */}
+      <div className="mt-4 flex gap-2">
+        <input
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleAddButton();
+          }}
+          placeholder="예: 에어팟, 검정지갑"
+          className="min-w-0 flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm outline-none placeholder:text-gray-400 focus:bg-gray-50"
+        />
+        <button
+          type="button"
+          onClick={handleAddButton}
+          className="shrink-0 rounded-xl bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+        >
+          등록
+        </button>
+      </div>
 
-      <section className="w-[375px] p-5">
-        <h1 className="pb-5 text-sm">키워드 관리</h1>
-        <div className="flex flex-wrap gap-[14px]">
-          {userKeyword.keywords === ''
-            ? noKeywordMessage
-            : keywordsArray.map((keyword, index) => (
-                <Keyword
-                  key={index}
-                  keyword={keyword}
-                  onDelete={handleClearButton}
-                />
-              ))}
-        </div>
-      </section>
+      {/* 등록한 키워드 */}
+      <div className="mt-6 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-gray-800">등록한 키워드</h2>
+        <span className="text-sm font-semibold text-primary">
+          {keywordsArray.length}/10
+        </span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2.5">
+        {keywordsArray.length === 0 ? (
+          <p className="w-full py-6 text-center text-sm text-gray-400">
+            등록된 키워드가 없습니다.
+          </p>
+        ) : (
+          keywordsArray.map((keyword, index) => (
+            <Keyword key={index} keyword={keyword} onDelete={handleClearButton} />
+          ))
+        )}
+      </div>
+
       {isCountModal && (
         <ModalComp
           children="키워드는 최대 10개 등록 가능합니다."

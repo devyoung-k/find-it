@@ -1,156 +1,122 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FormEvent, useEffect, useState } from 'react';
-import PostBox from '@/widgets/community/ui/PostBox';
-import IconPlus from '@/assets/icons/icon_plus.svg';
+import { Pencil } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { getTimeDiff } from '@/lib/utils/getTimeDiff';
-import SearchBar from '@/shared/ui/SearchBar';
-import Horizon from '@/shared/ui/layout/Horizon';
-import { searchCommunityPosts, CommunityPost } from '@/lib/api/community';
+import {
+  fetchRecentCommunityPosts,
+  CommunityPost
+} from '@/lib/api/community';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
-import { supabase } from '@/lib/api/supabaseClient';
-import { logger } from '@/lib/utils/logger';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import FilterChip from '@/shared/ui/FilterChip';
+import PostTagBadge, { primaryTagOf } from '@/shared/ui/PostTagBadge';
+
+const TAG_FILTERS = ['전체', '습득', '분실', '후기', '질문'];
+
+const PostRow = ({ post }: { post: CommunityPost }) => (
+  <Link
+    to={`/postdetail/${post.id}`}
+    className="block border-b border-gray-100 py-4 active:bg-gray-50"
+  >
+    <div className="flex items-center gap-2 text-xs text-gray-400">
+      <PostTagBadge tag={post.tag} />
+      <span className="font-medium text-gray-600">
+        {post.author_nickname || '익명'}
+      </span>
+      <span>· {getTimeDiff({ createdAt: post.created_at })}</span>
+    </div>
+    <h3 className="mt-1.5 truncate text-[16px] font-bold text-gray-900">
+      {post.title}
+    </h3>
+    <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-gray-500">
+      {post.content}
+    </p>
+  </Link>
+);
 
 const PostList = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [desktopQuery, setDesktopQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<CommunityPost[] | null>(
-    null
-  );
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const isLoggedIn = useAuthStore((s) => !!s.user);
+  const [selected, setSelected] = useState('전체');
 
-  const handleDesktopSearch = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmedQuery = desktopQuery.trim();
+  const { data: posts = [], isLoading } = useQuery({
+    queryKey: ['communityPosts'],
+    queryFn: () => fetchRecentCommunityPosts(100),
+    staleTime: 1000 * 60
+  });
 
-    if (!trimmedQuery) {
-      setSearchResults(null);
-      setSearchError(null);
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchError(null);
-    const sanitizedQuery = trimmedQuery.replace(/"/g, '\\"');
-    try {
-      const data = await searchCommunityPosts(sanitizedQuery);
-      setSearchResults(data);
-    } catch (error) {
-      logger.error('게시물 검색 오류', error);
-      setSearchError(
-        '검색 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
-      );
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const resetSearch = () => {
-    setDesktopQuery('');
-    setSearchResults(null);
-    setSearchError(null);
-  };
-
-  useEffect(() => {
-    const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setIsLoggedIn(!!data.session);
-    };
-
-    void fetchSession();
-  }, []);
+  const filtered = useMemo(() => {
+    if (selected === '전체') return posts;
+    return posts.filter((p) => primaryTagOf(p.tag) === selected);
+  }, [posts, selected]);
 
   useHeaderConfig(
     () => ({
-      isShowSymbol: true,
-      children: '자유게시판'
+      children: '자유게시판',
+      isShowSearch: true,
+      link: '/searchpost'
     }),
     []
   );
 
   return (
-    <div className="flex w-full flex-col items-center bg-white">
-      <div className="w-full flex-1">
-        <Horizon lineBold="bold" lineWidth="long" />
-        <div className="w-full border-b border-gray-100 px-5 py-4 md:py-6">
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
-            {searchResults && (
-              <div className="flex justify-end pb-2">
-                <button
-                  type="button"
-                  onClick={resetSearch}
-                  className="text-sm text-[#4F7EFF] hover:underline"
-                >
-                  검색 초기화
-                </button>
-              </div>
-            )}
-            <SearchBar
-              value={desktopQuery}
-              onChange={setDesktopQuery}
-              onSubmit={handleDesktopSearch}
-              placeholder="검색어를 입력해주세요"
-              disabled={isSearching}
-            />
-            {searchError && (
-              <p className="pt-2 text-sm text-red-500">{searchError}</p>
-            )}
-          </div>
-        </div>
-        <div className="relative mx-auto w-full max-w-7xl pb-20">
-            {isSearching && (
-              <p className="py-10 text-center text-sm text-gray-500">
-                검색 중입니다...
-              </p>
-            )}
-            {!isSearching && searchResults ? (
-              searchResults.length > 0 ? (
-                <div className="md:px-8">
-                  {searchResults.map((item) => (
-                    <div key={item.id} className="w-full">
-                      <Link to={`/postdetail/${item.id}`}>
-                        <section className="relative mx-auto my-0 h-40 w-full bg-white px-2.5 pt-2.5 transition-all duration-300 hover:shadow-lg md:h-[180px] md:rounded-2xl">
-                          {getTimeDiff({ createdAt: item.created_at })}
-                          <h1 className="truncate pt-2 text-base text-black md:text-lg">
-                            {item.title}
-                          </h1>
-                          <span className="w-full pt-2 text-xs whitespace-normal text-gray-700 md:text-sm">
-                            {(item.content.length > 64 &&
-                              item.content.slice(0, 64) + '...') ||
-                              item.content}
-                          </span>
-                          <span className="text-gray-450 absolute bottom-3.5 block text-xs">
-                            #{item.tag ?? ''}
-                          </span>
-                        </section>
-                      </Link>
-                      <div className="mx-auto my-0 h-2.5 w-full border-t border-t-gray-300 bg-gray-200 md:h-4 md:max-w-full" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="py-10 text-center text-sm text-gray-500">
-                  검색 결과가 없습니다.
-                </p>
-              )
-            ) : (
-              !isSearching && <PostBox />
-            )}
+    <div className="min-h-nav-safe bg-white">
+      <div className="mx-auto w-full max-w-[800px] px-4 pb-24 md:px-6">
+        {/* 데스크탑 헤더 */}
+        <div className="hidden items-center justify-between pt-8 md:flex">
+          <h1 className="text-2xl font-extrabold text-gray-900">자유게시판</h1>
           {isLoggedIn && (
             <Link
               to="/createpost"
-              className="fixed right-5 bottom-[calc(var(--app-nav-bottom)+24px)] z-20 md:right-10 md:bottom-10"
-              aria-label="글쓰기"
+              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
             >
-              <img
-                src={IconPlus}
-                alt="글쓰기 버튼"
-                className="size-60px drop-shadow-xl hover:animate-bounce"
-              />
+              <Pencil size={16} />
+              글쓰기
             </Link>
           )}
         </div>
+
+        {/* 필터 칩 */}
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pt-4 pb-1 md:mx-0 md:px-0 md:pt-5">
+          {TAG_FILTERS.map((tag) => (
+            <FilterChip
+              key={tag}
+              size="sm"
+              active={selected === tag}
+              onClick={() => setSelected(tag)}
+            >
+              {tag}
+            </FilterChip>
+          ))}
+        </div>
+
+        {/* 목록 */}
+        <div className="mt-2">
+          {isLoading ? (
+            <p className="py-16 text-center text-sm text-gray-400">
+              게시물을 불러오는 중입니다...
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="py-16 text-center text-sm text-gray-400">
+              아직 게시물이 없습니다.
+            </p>
+          ) : (
+            filtered.map((post) => <PostRow key={post.id} post={post} />)
+          )}
+        </div>
       </div>
+
+      {/* 모바일 플로팅 글쓰기 */}
+      {isLoggedIn && (
+        <Link
+          to="/createpost"
+          aria-label="글쓰기"
+          className="fixed right-4 bottom-20 z-30 flex items-center gap-1.5 rounded-full bg-primary px-5 py-3 font-semibold text-white shadow-lg transition-transform hover:scale-105 md:hidden"
+        >
+          <Pencil size={18} />
+          글쓰기
+        </Link>
+      )}
     </div>
   );
 };

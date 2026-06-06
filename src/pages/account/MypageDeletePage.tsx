@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import InputFormSlim from '@/features/auth/sign-in/ui/InputFormSlim';
 import ButtonVariable from '@/shared/ui/buttons/ButtonVariable';
 import ModalComp from '@/shared/ui/modal/ModalComp';
-import { supabase } from '@/lib/api/supabaseClient';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import { deleteAccount } from '@/lib/api/auth';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
 
@@ -19,22 +20,9 @@ type AlertProps =
   | '';
 
 const MypageDelete = () => {
-  const [userEmail, setUserEmail] = useState('');
-  const [userId, setUserId] = useState('');
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (!user) return;
-      setUserEmail(user.email ?? '');
-      setUserId(user.id);
-    };
-
-    void loadUser();
-  }, []);
+  const user = useAuthStore((s) => s.user);
+  const userEmail = user?.email ?? '';
+  const userId = user?.id ?? '';
 
   const [emailValue, setEmailValue] = useState('');
   const [emailCheckValue, setEmailCheckValue] = useState('');
@@ -80,8 +68,8 @@ const MypageDelete = () => {
   const deleteData = async () => {
     if (!userId) return;
     try {
-      await supabase.from('profiles').delete().eq('id', userId);
-      await supabase.auth.signOut();
+      await deleteAccount();
+      useAuthStore.setState({ user: null, status: 'guest' });
     } catch (error) {
       logger.error('사용자 데이터 삭제 오류', error);
     }

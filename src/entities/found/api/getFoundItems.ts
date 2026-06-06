@@ -1,4 +1,5 @@
 import { AllData } from '@/types/types';
+import { API_BASE_URL, buildHeaders } from '@/lib/api/auth';
 
 const DEFAULT_IMAGE =
   'https://www.lost112.go.kr/lostnfs/images/sub/img02_no_img.gif';
@@ -20,48 +21,13 @@ export interface GetFoundItemsResponse {
   >;
 }
 
-const resolveApiBaseUrl = () => {
-  const envValue = (
-    import.meta.env.VITE_API_BASE_URL as string | undefined
-  )?.replace(/\/$/, '');
-  const base =
-    envValue && envValue.length > 0
-      ? envValue
-      : 'http://52.79.241.212:8080/api';
-
-  if (
-    typeof window !== 'undefined' &&
-    window.location.protocol === 'https:' &&
-    base.startsWith('http://')
-  ) {
-    // When served over HTTPS, go through the Vercel rewrite to avoid mixed content.
-    return `${window.location.origin}/api`;
-  }
-
-  return base;
-};
-
-const API_BASE_URL = resolveApiBaseUrl();
-
-const API_SECURITY_KEY = import.meta.env.VITE_API_SECURITY_KEY as
-  | string
-  | undefined;
-
 export const getFoundItems = async (
   page: number = 0,
   size: number = 10
 ): Promise<AllData[]> => {
-  const requestOptions: RequestInit = {};
-
-  if (API_SECURITY_KEY) {
-    requestOptions.headers = {
-      'X-API-KEY': API_SECURITY_KEY
-    };
-  }
-
   const response = await fetch(
     `${API_BASE_URL}/found-items?page=${page}&size=${size}`,
-    requestOptions
+    { headers: buildHeaders() }
   );
 
   if (!response.ok) {

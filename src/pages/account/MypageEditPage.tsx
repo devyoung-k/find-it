@@ -1,10 +1,10 @@
-import { supabase } from '@/lib/api/supabaseClient';
 import {
-  fetchProfileById,
   fetchProfileByNickname,
   updateProfile,
   type Profile
 } from '@/lib/api/profile';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import { requestPasswordReset } from '@/lib/api/auth';
 import { Link } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import useSidoList from '@/features/auth/sign-in/hooks/useSidoList';
@@ -30,6 +30,8 @@ type AlertProps =
 type ConfirmProps = 'doubleCheckEmail' | 'doubleCheckNickname' | '';
 
 const MypageEdit = () => {
+  const user = useAuthStore((s) => s.user);
+  const patchUser = useAuthStore((s) => s.patchUser);
     // 유효성 검사
   const [userNickname, setUserNickname] = useState('');
   const [userId, setUserId] = useState('');
@@ -39,29 +41,14 @@ const MypageEdit = () => {
   const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
-    const loadProfile = async () => {
-      const { data } = await supabase.auth.getUser();
-      const authUser = data.user;
-      if (!authUser) return;
-
-      setUserId(authUser.id);
-      setUserEmail(authUser.email ?? '');
-
-      try {
-        const profileData = await fetchProfileById(authUser.id);
-        if (profileData) {
-          setUserNickname(profileData.nickname ?? '');
-          setUserAvatar(profileData.avatar_url ?? '');
-          setUserSido(profileData.state ?? '');
-          setUserGungu(profileData.city ?? '');
-        }
-      } catch (error) {
-        logger.error('프로필 정보를 불러오지 못했습니다.', error);
-      }
-    };
-
-    void loadProfile();
-  }, []);
+    if (!user) return;
+    setUserId(user.id);
+    setUserEmail(user.email ?? '');
+    setUserNickname(user.nickname ?? '');
+    setUserAvatar(user.avatarUrl ?? '');
+    setUserSido(user.state ?? '');
+    setUserGungu(user.city ?? '');
+  }, [user]);
 
     // 입력값
 
@@ -131,15 +118,7 @@ const MypageEdit = () => {
 
     void (async () => {
       try {
-        const redirectTo = `${window.location.origin}/reset-password`;
-        const { error } = await supabase.auth.resetPasswordForEmail(userEmail, {
-          redirectTo,
-        });
-
-        if (error) {
-          throw error;
-        }
-
+        await requestPasswordReset(userEmail);
         setPasswordResetMessage(
           '비밀번호 재설정 메일을 전송했습니다. 메일함을 확인해주세요.'
         );
@@ -217,6 +196,15 @@ const MypageEdit = () => {
     try {
       if (Object.keys(profileUpdates).length > 0) {
         await updateProfile(userId, profileUpdates);
+        patchUser({
+          ...(profileUpdates.nickname !== undefined && {
+            nickname: profileUpdates.nickname
+          }),
+          ...(profileUpdates.state !== undefined && {
+            state: profileUpdates.state
+          }),
+          ...(profileUpdates.city !== undefined && { city: profileUpdates.city })
+        });
       }
 
       setIsModalOpen(true);
@@ -231,42 +219,11 @@ const MypageEdit = () => {
     window.location.href = '/mypage';
   };
 
-    // 프로필 사진 변경
+    // 프로필 사진 변경 (백엔드 업로드 엔드포인트 연동 전 — 준비 중)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const AVATAR_BUCKET = 'avatars';
 
-  const handleFileInput = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    try {
-      const files = event.target.files;
-      if (!files || files.length === 0 || !userId) return;
-
-      const file = files[0];
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${userId}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .upload(filePath, file, {
-          upsert: true,
-          cacheControl: '3600',
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(filePath);
-
-      await updateProfile(userId, { avatar_url: publicUrl });
-      setUserAvatar(publicUrl);
-    } catch (error) {
-      logger.error('프로필 변경 데이터 통신 오류', error);
-      alert('프로필 이미지를 업로드하지 못했습니다. 잠시 후 다시 시도해주세요.');
-    }
+  const handleFileInput = () => {
+    alert('프로필 사진 업로드는 준비 중입니다.');
   };
   //프로필 버튼 클릭시 파일 선택창 열기
   const handleProfileChange = () => {

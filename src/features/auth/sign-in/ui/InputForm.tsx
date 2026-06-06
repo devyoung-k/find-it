@@ -62,10 +62,6 @@ const InputForm: React.ForwardRefRenderFunction<
     setIsFocus(false);
   };
 
-  const defaultColor = '#e4e4e4';
-  const activeColor = '#4785ff';
-  const borderColor = (isFocus && activeColor) || defaultColor;
-
   return (
     <div
       style={{
@@ -73,13 +69,13 @@ const InputForm: React.ForwardRefRenderFunction<
       }}
     >
       <div
-        className="flex h-[48px] w-full items-center justify-between"
-        style={{ borderBottom: `1.4px solid ${borderColor}` }}
+        className={`flex h-[52px] w-full items-center justify-between gap-2 rounded-xl px-4 transition-colors ${
+          isFocus ? 'bg-gray-50 ring-2 ring-primary/30' : 'bg-gray-100'
+        }`}
       >
         <label className="sr-only">{title}</label>
         <input
-          className="text-#989898 w-full pl-2.5 pr-2.5 text-sm"
-          style={{ outline: 'none' }}
+          className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
           ref={ref}
           type={type}
           name={title}

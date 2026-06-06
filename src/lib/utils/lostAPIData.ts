@@ -1,171 +1,65 @@
-import { xmlToJson } from '@/lib/utils/xmlToJson';
-import { raiseValue } from '@/lib/utils/raiseValue';
-import { DetailData, JsonObject } from '@/types/types';
+import { DetailData } from '@/types/types';
 import { logger } from '@/lib/utils/logger';
+import { API_BASE_URL, buildHeaders } from '@/lib/api/auth';
 
-function isJsonObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+const DEFAULT_IMAGE =
+  'https://www.lost112.go.kr/lostnfs/images/sub/img02_no_img.gif';
+
+interface LostItemDetailResponse {
+  success: boolean;
+  message?: string;
+  data?:
+    | {
+        atcId?: string;
+        prdtClNm?: string;
+        lstPlace?: string;
+        lstYmd?: string;
+        lstPrdtNm?: string;
+        lstSbjt?: string;
+        lstFilePathImg?: string;
+        rnum?: string;
+      }
+    | null;
 }
 
-const parseDetailData = (json: JsonObject): Partial<DetailData> | null => {
-  const detailKeys: Array<keyof DetailData> = [
-    'id',
-    'item_name',
-    'image',
-    'place',
-    'date',
-    'item_type',
-    'description',
-    'storage',
-    'contact',
-  ];
-
-  const result: Partial<DetailData> = {};
-
-  detailKeys.forEach((key) => {
-    const value = json[key];
-    if (typeof value === 'string') {
-      result[key] = value;
-    }
-  });
-
-  return Object.keys(result).length > 0 ? result : null;
-};
-
-// Partial: 모든 속성을 선택적으로 만듦
-const isDetailData = (object: Partial<DetailData>): object is DetailData => {
-  return (
-    typeof object.id === 'string' &&
-    typeof object.item_name === 'string' &&
-    typeof object.image === 'string' &&
-    typeof object.place === 'string' &&
-    typeof object.date === 'string' &&
-    typeof object.item_type === 'string' &&
-    typeof object.description === 'string' &&
-    typeof object.storage === 'string' &&
-    typeof object.contact === 'string'
-  );
-};
-
-export const lostAllData = async (option = {}) => {
+/** 분실물 상세 (Spring 백엔드 /api/lost-items/{id}) */
+export const lostSearchId = async (id: string): Promise<DetailData | null> => {
   try {
-    const params = new URLSearchParams(option);
-
-    const response = await fetch(
-      `${import.meta.env.VITE_LOSTITEMS_ALL_API}?serviceKey=${import.meta.env.VITE_PUBLICINFO_API_KEY_INC}&${params.toString()}`
-    );
-
+    const response = await fetch(`${API_BASE_URL}/lost-items/${id}`, {
+      headers: buildHeaders()
+    });
     if (!response.ok) {
       throw new Error('네트워크 응답 없음');
     }
 
-    const data = await response.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(data, 'text/xml');
-    const json = xmlToJson(xml);
-
-    if (typeof json === 'string') {
-      throw new Error('json이 문자열입니다.');
+    const json = (await response.json()) as LostItemDetailResponse;
+    if (!json.success || !json.data) {
+      throw new Error(json.message || '분실물 상세 정보를 불러오지 못했습니다.');
     }
 
-    if (
-      isJsonObject(json) &&
-      isJsonObject(json.response) &&
-      isJsonObject(json.response.body) &&
-      isJsonObject(json.response.body.items)
-    ) {
-      const result = raiseValue(json.response?.body.items.item);
+    const item = json.data;
+    // 물품명이 없으면 분류명 소분류를 이름으로 사용
+    const subName = item.prdtClNm?.includes('>')
+      ? item.prdtClNm.split('>').pop()?.trim()
+      : item.prdtClNm;
 
-      return result;
-    }
-  } catch (error) {
-    logger.error('lostAllData 요청 실패', error);
-  }
-};
-
-export const lostSearchData = async (query: string, options = {}) => {
-  try {
-    const params = new URLSearchParams(options);
-
-    const response = await fetch(
-      `${import.meta.env.VITE_LOSTITEMS_SEARCH_API}?serviceKey=${import.meta.env.VITE_PUBLICINFO_API_KEY_INC}&LST_PRDT_NM=${query}&${params.toString()}`
-    );
-
-    if (!response.ok) {
-      throw new Error('네트워크 응답 없음');
-    }
-
-    const data = await response.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(data, 'text/xml');
-    const json = xmlToJson(xml);
-
-    if (typeof json === 'string') {
-      throw new Error('json이 문자열입니다.');
-    }
-
-    if (
-      isJsonObject(json) &&
-      isJsonObject(json.response) &&
-      isJsonObject(json.response.body) &&
-      isJsonObject(json.response.body.items)
-    ) {
-      const result = raiseValue(json.response?.body.items.item);
-
-      return result;
-    }
-  } catch (error) {
-    logger.error('lostSearchData 요청 실패', error);
-  }
-};
-
-export const lostSearchId = async (id: string) => {
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_LOSTITEMS_DETAIL_API}?serviceKey=${import.meta.env.VITE_PUBLICINFO_API_KEY_INC}&ATC_ID=${id}`
-    );
-
-    const data = await response.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(data, 'text/xml');
-    const json = xmlToJson(xml);
-
-    if (typeof json === 'string') {
-      throw new Error('json이 문자열입니다.');
-    }
-
-    if (
-      isJsonObject(json) &&
-      isJsonObject(json.response) &&
-      isJsonObject(json.response.body)
-    ) {
-      const item = raiseValue(json.response?.body.item);
-
-      if (isJsonObject(item)) {
-        const result = {
-          id: item.atcId,
-          item_name: item.lstPrdtNm,
-          image: item.lstFilePathImg,
-          place: item.lstPlace,
-          date: item.lstYmd,
-          item_type: item.lstPlaceSeNm,
-          description: item.lstSbjt,
-          storage: item.lstLctNm,
-          contact: item.tel,
-        };
-
-        if (isJsonObject(result)) {
-          const jsonObject: JsonObject = result;
-
-          const detailData = parseDetailData(jsonObject);
-
-          if (detailData !== null && isDetailData(detailData)) {
-            return detailData;
-          }
-        }
-      }
-    }
+    const detailData: DetailData = {
+      id: item.atcId ?? '',
+      item_name: item.lstPrdtNm || subName || '이름 미상',
+      image:
+        item.lstFilePathImg && item.lstFilePathImg !== ''
+          ? item.lstFilePathImg
+          : DEFAULT_IMAGE,
+      place: item.lstPlace ?? '',
+      date: item.lstYmd ?? '',
+      item_type: item.prdtClNm ?? '',
+      description: item.lstSbjt ?? '',
+      storage: '',
+      contact: ''
+    };
+    return detailData;
   } catch (error) {
     logger.error('lostSearchId 요청 실패', error);
+    return null;
   }
 };

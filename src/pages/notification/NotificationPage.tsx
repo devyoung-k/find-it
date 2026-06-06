@@ -5,55 +5,43 @@ import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
 
 interface CategoriesProps {
+  active: string;
   onChangeCategory: React.Dispatch<SetStateAction<string>>;
 }
 
-const Categories = ({ onChangeCategory }: CategoriesProps) => {
-  const [voidAlarmIcon, setVoidAlarmIcon] = useState(false);
-  const [activeButton, setActiveButton] = useState('notice');
-  const handleClick = (button: SetStateAction<string>) => {
-    setActiveButton(button);
-    onChangeCategory(button);
-  };
+const Categories = ({ active, onChangeCategory }: CategoriesProps) => {
+  const [hasAlarm, setHasAlarm] = useState(false);
 
-  // 추천 알림이 있으면 스타일 표시
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     try {
-      const savedRecommendations = window.localStorage.getItem('recommendations');
-      if (!savedRecommendations || savedRecommendations === '[]') {
-        setVoidAlarmIcon(false);
-      } else {
-        setVoidAlarmIcon(true);
-      }
+      const saved = window.localStorage.getItem('recommendations');
+      setHasAlarm(!!saved && saved !== '[]');
     } catch (error) {
       logger.warn('Failed to read recommendations', error);
-      setVoidAlarmIcon(false);
+      setHasAlarm(false);
     }
   }, []);
 
+  const tab = (key: string, label: string, dot = false) => (
+    <button
+      type="button"
+      onClick={() => onChangeCategory(key)}
+      className={`relative flex-1 rounded-full py-2 text-sm font-semibold transition-colors ${
+        active === key ? 'bg-white text-primary shadow-sm' : 'text-gray-500'
+      }`}
+    >
+      {label}
+      {dot && (
+        <span className="absolute top-2 right-6 h-1.5 w-1.5 rounded-full bg-secondary" />
+      )}
+    </button>
+  );
+
   return (
-    <div className="flex w-[375px]">
-      <button
-        className={`relative w-1/2 border-b-[1px] pb-[12px] pt-[13px] text-center text-sm transition-colors duration-300 ${activeButton === 'notice' ? 'border-black' : 'text-gray-400'}`}
-        onClick={() => handleClick('notice')}
-      >
-        내 키워드 알림
-        {voidAlarmIcon && (
-          <p
-            className={`absolute right-[37px] top-[13px] h-[7px] w-[7px] rounded-full bg-primary ${activeButton === 'setting' ? 'opacity-70' : ''}`}
-          >
-            &nbsp;
-          </p>
-        )}
-      </button>
-      <button
-        className={`w-1/2 border-b-[1px] pb-[12px] pt-[13px] text-center text-sm transition-colors duration-300 ${activeButton === 'setting' ? 'border-black' : 'text-gray-400'}`}
-        onClick={() => handleClick('setting')}
-      >
-        키워드 설정
-      </button>
+    <div className="flex gap-1 rounded-full bg-gray-100 p-1">
+      {tab('notice', '알림', hasAlarm)}
+      {tab('setting', '키워드 관리')}
     </div>
   );
 };
@@ -61,19 +49,15 @@ const Categories = ({ onChangeCategory }: CategoriesProps) => {
 const Notification = () => {
   const [activeCategory, setActiveCategory] = useState('notice');
   useHeaderConfig(
-    () => ({
-      isShowPrev: true,
-      children: '키워드 알림',
-      empty: true
-    }),
+    () => ({ isShowPrev: true, children: '키워드 알림', empty: true }),
     []
   );
 
   return (
-    <div className="flex w-full flex-col items-center px-4 pb-20 md:px-0 md:pt-8">
-      <div className="w-full max-w-[430px]">
-        <Categories onChangeCategory={setActiveCategory} />
-        <div className="mt-6">
+    <div className="min-h-nav-safe bg-white">
+      <div className="mx-auto w-full max-w-[640px] px-4 pt-4 pb-20 md:px-6 md:pt-6">
+        <Categories active={activeCategory} onChangeCategory={setActiveCategory} />
+        <div className="mt-5">
           {activeCategory === 'notice' && <Notice />}
           {activeCategory === 'setting' && <Setting />}
         </div>
