@@ -1,10 +1,11 @@
-import { useState, MouseEvent } from 'react';
+import { MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Clock, Bookmark } from 'lucide-react';
 import formatDisplayDate from '@/lib/utils/formatDisplayDate';
 import CategoryThumb from '@/shared/ui/item/CategoryThumb';
 import TypeBadge from '@/shared/ui/item/TypeBadge';
 import { useAuthGuard } from '@/features/auth/model/useAuthGuard';
+import { useBookmarkStore } from '@/features/bookmark/model/bookmarkStore';
 import {
   getCategoryMeta,
   formatCategoryLabel
@@ -68,8 +69,9 @@ const BookmarkButton = ({
 );
 
 const ItemBox = ({ itemType, item, layout = 'auto' }: ItemBoxProps) => {
-  const [bookmarked, setBookmarked] = useState(false);
   const ensureAuth = useAuthGuard();
+  const bookmarked = useBookmarkStore((s) => (item ? s.ids.has(item.atcId) : false));
+  const toggleBookmark = useBookmarkStore((s) => s.toggle);
 
   if (!item) return null;
 
@@ -90,7 +92,15 @@ const ItemBox = ({ itemType, item, layout = 'auto' }: ItemBoxProps) => {
     e.preventDefault();
     e.stopPropagation();
     if (!ensureAuth()) return; // 게스트면 로그인 페이지로
-    setBookmarked((prev) => !prev);
+    void toggleBookmark({
+      itemId: item.atcId,
+      itemType: isGet ? 'get' : 'lost',
+      name,
+      place,
+      imageUrl: image,
+      category,
+      itemDate: rawDate
+    });
   };
 
   const MetaRow = (

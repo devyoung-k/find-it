@@ -24,6 +24,7 @@ const SearchLostResult = lazy(
 const MypageEntry = lazy(() => import('@/pages/account/MypageEntryPage'));
 const MyPage = lazy(() => import('@/pages/account/MyPagePage'));
 const MyActivity = lazy(() => import('@/pages/account/MyActivityPage'));
+const Bookmarks = lazy(() => import('@/pages/account/BookmarksPage'));
 const MypageEdit = lazy(() => import('@/pages/account/MypageEditPage'));
 const MypageDelete = lazy(() => import('@/pages/account/MypageDeletePage'));
 const Notification = lazy(() => import('@/pages/notification/NotificationPage'));
@@ -66,6 +67,14 @@ const AppRouter = () => {
           element={
             <RequireAuth>
               <MyActivity />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/bookmarks"
+          element={
+            <RequireAuth>
+              <Bookmarks />
             </RequireAuth>
           }
         />

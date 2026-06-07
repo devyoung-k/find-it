@@ -9,7 +9,9 @@ import {
   deleteComment,
   deleteCommunityPost,
   fetchComments,
-  fetchCommunityPostById
+  fetchCommunityPostById,
+  likePost,
+  unlikePost
 } from '@/lib/api/community';
 import { fetchProfileById } from '@/lib/api/profile';
 import { useAuthStore } from '@/features/auth/model/authStore';
@@ -29,6 +31,7 @@ const PostDetailBody: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [likeBusy, setLikeBusy] = useState(false);
   const [comments, setComments] = useState<CommunityComment[]>([]);
   const [commentInput, setCommentInput] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
@@ -47,6 +50,10 @@ const PostDetailBody: React.FC = () => {
         if (canceled) return;
         setThisData(record);
         setComments(commentList);
+        if (record) {
+          setLiked(record.liked);
+          setLikeCount(record.like_count);
+        }
         if (record?.author_id) {
           const profileData = await fetchProfileById(record.author_id);
           if (!canceled) setAuthorAvatar(profileData?.avatar_url ?? '');
@@ -62,11 +69,21 @@ const PostDetailBody: React.FC = () => {
     };
   }, [id]);
 
-  const toggleLike = () => {
-    setLiked((prev) => {
-      setLikeCount((c) => (prev ? c - 1 : c + 1));
-      return !prev;
-    });
+  const toggleLike = async () => {
+    if (!id || likeBusy) return;
+    if (!ensureAuth()) return; // 게스트면 로그인 페이지로
+    setLikeBusy(true);
+    const wasLiked = liked;
+    try {
+      const res = wasLiked ? await unlikePost(id) : await likePost(id);
+      setLiked(res.liked);
+      setLikeCount(res.likeCount);
+    } catch (error) {
+      logger.error('좋아요 처리 실패', error);
+      alert('좋아요 처리에 실패했습니다.');
+    } finally {
+      setLikeBusy(false);
+    }
   };
 
   const handleAddComment = async () => {

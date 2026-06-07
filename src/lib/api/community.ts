@@ -8,6 +8,8 @@ export interface CommunityPost {
   author_id: string | null;
   author_nickname: string | null;
   image_urls: string[];
+  like_count: number;
+  liked: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -40,6 +42,8 @@ interface CommunityPostApi {
   authorId: string | null;
   authorNickname: string | null;
   imageUrls?: string[] | null;
+  likeCount?: number | null;
+  liked?: boolean | null;
   createdAt: string;
   updatedAt?: string | null;
 }
@@ -52,6 +56,8 @@ const toPost = (r: CommunityPostApi): CommunityPost => ({
   author_id: r.authorId ?? null,
   author_nickname: r.authorNickname ?? null,
   image_urls: r.imageUrls ?? [],
+  like_count: r.likeCount ?? 0,
+  liked: r.liked ?? false,
   created_at: r.createdAt,
   updated_at: r.updatedAt ?? undefined
 });
@@ -336,4 +342,28 @@ export const fetchMyComments = async (): Promise<MyComment[]> => {
     content: r.content,
     created_at: r.createdAt
   }));
+};
+
+/** 좋아요(공감). 인증 필요. 반환: 갱신된 상태/개수. */
+export const likePost = async (
+  postId: string
+): Promise<{ liked: boolean; likeCount: number }> => {
+  const res = await authorizedFetch(`/community/${postId}/likes`, {
+    method: 'POST'
+  });
+  if (!res.ok) throw new Error('좋아요에 실패했습니다.');
+  const json = (await res.json()) as ApiResponse<{ liked: boolean; likeCount: number }>;
+  return { liked: json.data.liked, likeCount: json.data.likeCount };
+};
+
+/** 좋아요 취소. 인증 필요. */
+export const unlikePost = async (
+  postId: string
+): Promise<{ liked: boolean; likeCount: number }> => {
+  const res = await authorizedFetch(`/community/${postId}/likes`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('좋아요 취소에 실패했습니다.');
+  const json = (await res.json()) as ApiResponse<{ liked: boolean; likeCount: number }>;
+  return { liked: json.data.liked, likeCount: json.data.likeCount };
 };
