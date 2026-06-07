@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Phone, Share2, Bookmark, ChevronLeft } from 'lucide-react';
 import KakaoMap from '@/shared/ui/KakaoMap';
@@ -8,6 +7,7 @@ import formatDisplayDate from '@/lib/utils/formatDisplayDate';
 import CategoryThumb from '@/shared/ui/item/CategoryThumb';
 import TypeBadge from '@/shared/ui/item/TypeBadge';
 import { useAuthGuard } from '@/features/auth/model/useAuthGuard';
+import { useBookmarkStore } from '@/features/bookmark/model/bookmarkStore';
 import {
   formatCategoryLabel,
   getCategoryMeta
@@ -28,11 +28,20 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
 const ItemDetail = ({ detail, kind = 'get' }: ItemDetailProps) => {
   const navigate = useNavigate();
   const ensureAuth = useAuthGuard();
-  const [bookmarked, setBookmarked] = useState(false);
+  const bookmarked = useBookmarkStore((s) => s.ids.has(detail.id));
+  const toggleBookmark = useBookmarkStore((s) => s.toggle);
 
   const handleBookmark = () => {
     if (!ensureAuth()) return; // 게스트면 로그인 페이지로
-    setBookmarked((p) => !p);
+    void toggleBookmark({
+      itemId: detail.id,
+      itemType: kind,
+      name: detail.item_name,
+      place: detail.place,
+      imageUrl: detail.image,
+      category: detail.item_type,
+      itemDate: detail.date
+    });
   };
 
   const isGet = kind === 'get';

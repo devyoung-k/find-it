@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/model/authStore';
 import { fetchMyPosts } from '@/lib/api/community';
+import { useBookmarkStore } from '@/features/bookmark/model/bookmarkStore';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
 
@@ -32,6 +33,7 @@ const MyPage = () => {
   const user = useAuthStore((s) => s.user);
   const status = useAuthStore((s) => s.status);
   const logout = useAuthStore((s) => s.logout);
+  const bookmarkCount = useBookmarkStore((s) => s.ids.size);
   const [postCount, setPostCount] = useState(0);
 
   // 인증 상태 확정 후 비로그인이면 로그인 페이지로
@@ -95,7 +97,7 @@ const MyPage = () => {
     .filter(Boolean).length;
 
   const stats = [
-    { label: '북마크', value: 0 },
+    { label: '북마크', value: bookmarkCount },
     { label: '키워드', value: keywordCount },
     { label: '내 글', value: postCount }
   ];
@@ -114,7 +116,12 @@ const MyPage = () => {
       count: `${keywordCount}개`,
       onClick: () => navigate('/notification')
     },
-    { label: '북마크한 물건', icon: Bookmark, count: '0개', onClick: showAlert },
+    {
+      label: '북마크한 물건',
+      icon: Bookmark,
+      count: `${bookmarkCount}개`,
+      onClick: () => navigate('/bookmarks')
+    },
     {
       label: '내가 쓴 글·댓글',
       icon: FileText,

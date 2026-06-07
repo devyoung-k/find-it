@@ -5,6 +5,7 @@ import AppRouter from '@/app/router/AppRouter';
 import ErrorBoundary from '@/shared/ui/ErrorBoundary';
 import { logger } from '@/lib/utils/logger';
 import { useAuthStore } from '@/features/auth/model/authStore';
+import { useBookmarkStore } from '@/features/bookmark/model/bookmarkStore';
 import { Analytics } from '@vercel/analytics/react';
 
 const SPLASH_KEY = 'alreadyVisited';
@@ -45,6 +46,12 @@ const App = () => {
 
   useEffect(() => {
     void useAuthStore.getState().init();
+    // 인증 상태에 따라 북마크 셋 로드/초기화
+    const unsub = useAuthStore.subscribe((state) => {
+      if (state.status === 'authenticated') void useBookmarkStore.getState().load();
+      else if (state.status === 'guest') useBookmarkStore.getState().reset();
+    });
+    return unsub;
   }, []);
 
   useEffect(() => {
