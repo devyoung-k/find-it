@@ -1,8 +1,9 @@
-import { ChevronLeft, Search, Bell } from 'lucide-react';
+import { ChevronLeft, Search } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import BrandLogo from '@/shared/ui/BrandLogo';
+import NotificationBell from '@/widgets/header/ui/NotificationBell';
 
 export interface HeaderProps {
   isShowLogo?: boolean;
@@ -90,11 +91,7 @@ const Header = ({
     );
   }
   if (showBell) {
-    rightItems.push(
-      <Link key="bell" to="/notification" aria-label="알림" className="text-gray-700">
-        <Bell size={22} />
-      </Link>
-    );
+    rightItems.push(<NotificationBell key="bell" />);
   }
   if (isShowSubmit !== undefined) {
     const isActive = Boolean(isShowSubmit);
