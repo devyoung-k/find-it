@@ -11,7 +11,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/model/authStore';
-import { fetchRecentCommunityPosts } from '@/lib/api/community';
+import { fetchMyPosts } from '@/lib/api/community';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
 
@@ -41,16 +41,14 @@ const MyPage = () => {
     }
   }, [status, navigate]);
 
-  // 내가 쓴 글 수 (최근글 중 작성자 일치 개수 근사)
+  // 내가 쓴 글 수 (정확한 총 개수)
   useEffect(() => {
     if (!user) return;
     let mounted = true;
     (async () => {
       try {
-        const posts = await fetchRecentCommunityPosts(100);
-        if (mounted) {
-          setPostCount(posts.filter((p) => p.author_id === user.id).length);
-        }
+        const page = await fetchMyPosts(0, 1);
+        if (mounted) setPostCount(page.totalElements);
       } catch (error) {
         logger.warn('내 글 수를 불러오지 못했습니다.', error);
       }
@@ -118,10 +116,10 @@ const MyPage = () => {
     },
     { label: '북마크한 물건', icon: Bookmark, count: '0개', onClick: showAlert },
     {
-      label: '내가 쓴 글',
+      label: '내가 쓴 글·댓글',
       icon: FileText,
       count: `${postCount}개`,
-      onClick: showAlert
+      onClick: () => navigate('/myactivity')
     },
     { label: '분실물 등록하기', icon: Tag, onClick: showAlert }
   ];
