@@ -4,6 +4,7 @@ import { MapPin, Clock, Bookmark } from 'lucide-react';
 import formatDisplayDate from '@/lib/utils/formatDisplayDate';
 import CategoryThumb from '@/shared/ui/item/CategoryThumb';
 import TypeBadge from '@/shared/ui/item/TypeBadge';
+import { useAuthGuard } from '@/features/auth/model/useAuthGuard';
 import {
   getCategoryMeta,
   formatCategoryLabel
@@ -68,6 +69,7 @@ const BookmarkButton = ({
 
 const ItemBox = ({ itemType, item, layout = 'auto' }: ItemBoxProps) => {
   const [bookmarked, setBookmarked] = useState(false);
+  const ensureAuth = useAuthGuard();
 
   if (!item) return null;
 
@@ -87,6 +89,7 @@ const ItemBox = ({ itemType, item, layout = 'auto' }: ItemBoxProps) => {
   const handleBookmark = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!ensureAuth()) return; // 게스트면 로그인 페이지로
     setBookmarked((prev) => !prev);
   };
 

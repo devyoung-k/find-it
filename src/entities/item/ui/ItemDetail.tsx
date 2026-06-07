@@ -7,6 +7,7 @@ import { logger } from '@/lib/utils/logger';
 import formatDisplayDate from '@/lib/utils/formatDisplayDate';
 import CategoryThumb from '@/shared/ui/item/CategoryThumb';
 import TypeBadge from '@/shared/ui/item/TypeBadge';
+import { useAuthGuard } from '@/features/auth/model/useAuthGuard';
 import {
   formatCategoryLabel,
   getCategoryMeta
@@ -26,7 +27,13 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
 
 const ItemDetail = ({ detail, kind = 'get' }: ItemDetailProps) => {
   const navigate = useNavigate();
+  const ensureAuth = useAuthGuard();
   const [bookmarked, setBookmarked] = useState(false);
+
+  const handleBookmark = () => {
+    if (!ensureAuth()) return; // 게스트면 로그인 페이지로
+    setBookmarked((p) => !p);
+  };
 
   const isGet = kind === 'get';
   const placeLabel = isGet ? '습득장소' : '분실장소';
@@ -154,7 +161,7 @@ const ItemDetail = ({ detail, kind = 'get' }: ItemDetailProps) => {
             <div className="mt-8 hidden items-center gap-3 md:flex">
               <button
                 type="button"
-                onClick={() => setBookmarked((p) => !p)}
+                onClick={handleBookmark}
                 aria-label="북마크"
                 className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${
                   bookmarked
@@ -191,7 +198,7 @@ const ItemDetail = ({ detail, kind = 'get' }: ItemDetailProps) => {
       <div className="fixed right-0 bottom-16 left-0 z-40 flex items-center gap-3 border-t border-gray-100 bg-white px-4 py-3 md:hidden">
         <button
           type="button"
-          onClick={() => setBookmarked((p) => !p)}
+          onClick={handleBookmark}
           aria-label="북마크"
           className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${
             bookmarked ? 'border-primary text-primary' : 'border-gray-200 text-gray-500'
