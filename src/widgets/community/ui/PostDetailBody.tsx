@@ -1,52 +1,65 @@
-import { useParams } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
-import { Heart, Send, User as UserIcon } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Heart, Pencil, Send, Trash2, User as UserIcon } from 'lucide-react';
 import { getTimeDiff } from '@/lib/utils/getTimeDiff';
-import { CommunityPost, fetchCommunityPostById } from '@/lib/api/community';
+import {
+  CommunityComment,
+  CommunityPost,
+  createComment,
+  deleteComment,
+  deleteCommunityPost,
+  fetchComments,
+  fetchCommunityPostById
+} from '@/lib/api/community';
 import { fetchProfileById } from '@/lib/api/profile';
+import { useAuthStore } from '@/features/auth/model/authStore';
+import { useAuthGuard } from '@/features/auth/model/useAuthGuard';
 import { logger } from '@/lib/utils/logger';
 import { useProgressIndicator } from '@/shared/hooks/useProgressIndicator';
 import PostTagBadge from '@/shared/ui/PostTagBadge';
 
-// 참고: 공감/댓글은 아직 백엔드 스키마가 없어 세션 동안만 유지되는 클라이언트 상태입니다.
-interface LocalComment {
-  id: number;
-  text: string;
-  createdAt: string;
-}
-
 const PostDetailBody: React.FC = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const ensureAuth = useAuthGuard();
+
   const [thisData, setThisData] = useState<CommunityPost | null>(null);
   const [authorAvatar, setAuthorAvatar] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [comments, setComments] = useState<LocalComment[]>([]);
+  const [comments, setComments] = useState<CommunityComment[]>([]);
   const [commentInput, setCommentInput] = useState('');
-  const commentSeq = useRef(0);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(false);
   useProgressIndicator(isLoading);
 
   useEffect(() => {
+    let canceled = false;
     (async () => {
       try {
         if (!id) return;
-        const record = await fetchCommunityPostById(id);
-        if (record) {
-          setThisData(record);
-          if (record.author_id) {
-            const profileData = await fetchProfileById(record.author_id);
-            setAuthorAvatar(profileData?.avatar_url ?? '');
-          }
-        } else {
-          setThisData(null);
+        const [record, commentList] = await Promise.all([
+          fetchCommunityPostById(id),
+          fetchComments(id).catch(() => [])
+        ]);
+        if (canceled) return;
+        setThisData(record);
+        setComments(commentList);
+        if (record?.author_id) {
+          const profileData = await fetchProfileById(record.author_id);
+          if (!canceled) setAuthorAvatar(profileData?.avatar_url ?? '');
         }
       } catch (error) {
         logger.error('자유게시판 글을 불러오지 못했습니다.', error);
       } finally {
-        setIsLoading(false);
+        if (!canceled) setIsLoading(false);
       }
     })();
+    return () => {
+      canceled = true;
+    };
   }, [id]);
 
   const toggleLike = () => {
@@ -56,15 +69,51 @@ const PostDetailBody: React.FC = () => {
     });
   };
 
-  const addComment = () => {
+  const handleAddComment = async () => {
     const text = commentInput.trim();
-    if (!text) return;
-    commentSeq.current += 1;
-    setComments((prev) => [
-      ...prev,
-      { id: commentSeq.current, text, createdAt: new Date().toISOString() }
-    ]);
-    setCommentInput('');
+    if (!text || commentSubmitting || !id) return;
+    if (!ensureAuth()) return; // 게스트면 로그인 페이지로
+    setCommentSubmitting(true);
+    try {
+      const nickname = user?.nickname || user?.email?.split('@')[0] || '익명';
+      const created = await createComment(id, text, nickname);
+      setComments((prev) => [...prev, created]);
+      setCommentInput('');
+    } catch (error) {
+      logger.error('댓글 등록 실패', error);
+      alert('댓글 등록에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('댓글을 삭제할까요?')) return;
+    try {
+      await deleteComment(commentId);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch (error) {
+      logger.error('댓글 삭제 실패', error);
+      alert('댓글 삭제에 실패했습니다.');
+    }
+  };
+
+  const handleEditPost = () => {
+    if (id) navigate(`/createpost/${id}`);
+  };
+
+  const handleDeletePost = async () => {
+    if (!id || deletingPost) return;
+    if (!window.confirm('이 게시글을 삭제할까요? 되돌릴 수 없습니다.')) return;
+    setDeletingPost(true);
+    try {
+      await deleteCommunityPost(id);
+      navigate('/postlist', { replace: true });
+    } catch (error) {
+      logger.error('게시글 삭제 실패', error);
+      alert('게시글 삭제에 실패했습니다.');
+      setDeletingPost(false);
+    }
   };
 
   if (isLoading) return null;
@@ -75,13 +124,35 @@ const PostDetailBody: React.FC = () => {
       </p>
     );
 
-  const { title, content, tag, author_nickname, created_at } = thisData;
+  const { title, content, tag, author_id, author_nickname, created_at } = thisData;
+  const isPostOwner = Boolean(user?.id && author_id && user.id === author_id);
 
   return (
     <div className="mx-auto w-full max-w-[800px] px-4 pb-32 md:px-6 md:pb-12">
       {/* 본문 */}
       <div className="pt-5">
-        <PostTagBadge tag={tag} />
+        <div className="flex items-start justify-between gap-2">
+          <PostTagBadge tag={tag} />
+          {isPostOwner && (
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={handleEditPost}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50"
+              >
+                <Pencil size={14} /> 수정
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePost}
+                disabled={deletingPost}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-secondary hover:bg-[#FFEDE9] disabled:opacity-40"
+              >
+                <Trash2 size={14} /> 삭제
+              </button>
+            </div>
+          )}
+        </div>
         <h1 className="mt-3 text-[22px] leading-snug font-extrabold text-gray-900">
           {title}
         </h1>
@@ -136,22 +207,37 @@ const PostDetailBody: React.FC = () => {
             첫 댓글을 남겨보세요.
           </li>
         ) : (
-          comments.map((c) => (
-            <li key={c.id} className="flex items-start gap-2.5">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                <UserIcon size={16} className="text-gray-400" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-gray-800">
-                  나{' '}
-                  <span className="text-xs font-normal text-gray-400">
-                    {getTimeDiff({ createdAt: c.createdAt })}
-                  </span>
-                </p>
-                <p className="mt-0.5 text-sm text-gray-600">{c.text}</p>
-              </div>
-            </li>
-          ))
+          comments.map((c) => {
+            const isMine = Boolean(user?.id && c.author_id && user.id === c.author_id);
+            return (
+              <li key={c.id} className="flex items-start gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                  <UserIcon size={16} className="text-gray-400" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                    {c.author_nickname || '익명'}
+                    <span className="text-xs font-normal text-gray-400">
+                      {getTimeDiff({ createdAt: c.created_at })}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-sm whitespace-pre-wrap text-gray-600">
+                    {c.content}
+                  </p>
+                </div>
+                {isMine && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteComment(c.id)}
+                    aria-label="댓글 삭제"
+                    className="shrink-0 rounded p-1 text-gray-300 hover:text-secondary"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </li>
+            );
+          })
         )}
       </ul>
 
@@ -162,17 +248,17 @@ const PostDetailBody: React.FC = () => {
             value={commentInput}
             onChange={(e) => setCommentInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') addComment();
+              if (e.key === 'Enter') handleAddComment();
             }}
             placeholder="댓글을 입력하세요"
             className="min-w-0 flex-1 rounded-full bg-gray-100 px-4 py-2.5 text-sm outline-none placeholder:text-gray-400 focus:bg-gray-50"
           />
           <button
             type="button"
-            onClick={addComment}
+            onClick={handleAddComment}
             aria-label="댓글 등록"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-40"
-            disabled={!commentInput.trim()}
+            disabled={!commentInput.trim() || commentSubmitting}
           >
             <Send size={18} />
           </button>

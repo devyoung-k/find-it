@@ -1,7 +1,11 @@
-import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Camera, MapPin } from 'lucide-react';
-import { createCommunityPost } from '@/lib/api/community';
+import {
+  createCommunityPost,
+  fetchCommunityPostById,
+  updateCommunityPost
+} from '@/lib/api/community';
 import { useAuthStore } from '@/features/auth/model/authStore';
 import { useHeaderConfig } from '@/widgets/header/model/HeaderConfigContext';
 import { logger } from '@/lib/utils/logger';
@@ -11,11 +15,48 @@ const CATEGORIES = ['습득', '분실', '후기', '질문'];
 
 const CreatePost = () => {
   const navigate = useNavigate();
+  const { id } = useParams(); // 있으면 수정 모드
+  const isEdit = Boolean(id);
   const user = useAuthStore((s) => s.user);
   const [category, setCategory] = useState('습득');
   const [titleValue, setTitleValue] = useState('');
   const [bodyValue, setBodyValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(isEdit);
+
+  // 수정 모드: 기존 글 로드 + 본인 글인지 확인
+  useEffect(() => {
+    if (!isEdit || !id) return;
+    let canceled = false;
+    (async () => {
+      try {
+        const post = await fetchCommunityPostById(id);
+        if (canceled) return;
+        if (!post) {
+          alert('게시글을 찾을 수 없습니다.');
+          navigate('/postlist', { replace: true });
+          return;
+        }
+        if (user && post.author_id && post.author_id !== user.id) {
+          alert('본인이 작성한 글만 수정할 수 있습니다.');
+          navigate(`/postdetail/${id}`, { replace: true });
+          return;
+        }
+        setTitleValue(post.title);
+        setBodyValue(post.content);
+        setCategory(post.tag ?? '습득');
+      } catch (error) {
+        logger.error('게시글 로드 실패', error);
+        alert('게시글을 불러오지 못했습니다.');
+        navigate('/postlist', { replace: true });
+      } finally {
+        if (!canceled) setLoading(false);
+      }
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [isEdit, id, user, navigate]);
 
   const isReady = titleValue.trim() !== '' && bodyValue.trim() !== '';
 
@@ -28,32 +69,57 @@ const CreatePost = () => {
     }
     setSubmitting(true);
     try {
-      await createCommunityPost({
-        title: titleValue.trim(),
-        content: bodyValue.trim(),
-        tag: category,
-        author_nickname: user.nickname || user.email?.split('@')[0] || '익명'
-      });
-      navigate('/postlist');
+      if (isEdit && id) {
+        await updateCommunityPost(id, {
+          title: titleValue.trim(),
+          content: bodyValue.trim(),
+          tag: category
+        });
+        navigate(`/postdetail/${id}`);
+      } else {
+        await createCommunityPost({
+          title: titleValue.trim(),
+          content: bodyValue.trim(),
+          tag: category,
+          author_nickname: user.nickname || user.email?.split('@')[0] || '익명'
+        });
+        navigate('/postlist');
+      }
     } catch (error) {
-      logger.error('게시글 등록 실패', error);
-      alert('게시글 등록에 실패했습니다. 다시 시도해 주세요.');
+      logger.error(isEdit ? '게시글 수정 실패' : '게시글 등록 실패', error);
+      alert(
+        isEdit
+          ? '게시글 수정에 실패했습니다. 다시 시도해 주세요.'
+          : '게시글 등록에 실패했습니다. 다시 시도해 주세요.'
+      );
       setSubmitting(false);
     }
-  }, [isReady, submitting, user, titleValue, bodyValue, category, navigate]);
+  }, [
+    isReady,
+    submitting,
+    user,
+    isEdit,
+    id,
+    titleValue,
+    bodyValue,
+    category,
+    navigate
+  ]);
 
   useHeaderConfig(
     () => ({
       isShowPrev: true,
-      children: '글쓰기',
+      children: isEdit ? '글 수정' : '글쓰기',
       isShowSubmit: isReady && !submitting,
       onSubmitClick: handleSubmit,
       submitLabel: '완료'
     }),
-    [isReady, submitting, handleSubmit]
+    [isEdit, isReady, submitting, handleSubmit]
   );
 
   const notReady = () => alert('준비 중인 기능입니다.');
+
+  if (loading) return null;
 
   return (
     <div className="min-h-nav-safe bg-white">
@@ -101,7 +167,7 @@ const CreatePost = () => {
                 : 'bg-gray-300'
             }`}
           >
-            게시하기
+            {isEdit ? '수정 완료' : '게시하기'}
           </button>
         </div>
       </div>

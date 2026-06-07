@@ -115,3 +115,105 @@ export const createCommunityPost = async (
     throw new Error('게시글 등록에 실패했습니다.');
   }
 };
+
+/** 게시글 수정(작성자 본인만). 서버가 JWT 로 소유권 검사. */
+export const updateCommunityPost = async (
+  id: string,
+  payload: Pick<CommunityPost, 'title' | 'content' | 'tag'>
+) => {
+  const response = await authorizedFetch(`/community/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      title: payload.title,
+      content: payload.content,
+      tag: payload.tag
+    })
+  });
+  if (!response.ok) {
+    throw new Error('게시글 수정에 실패했습니다.');
+  }
+};
+
+/** 게시글 삭제(작성자 본인만). */
+export const deleteCommunityPost = async (id: string) => {
+  const response = await authorizedFetch(`/community/${id}`, {
+    method: 'DELETE'
+  });
+  if (!response.ok) {
+    throw new Error('게시글 삭제에 실패했습니다.');
+  }
+};
+
+export interface CommunityComment {
+  id: string;
+  post_id: string;
+  content: string;
+  author_id: string | null;
+  author_nickname: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+interface CommunityCommentApi {
+  id: string;
+  postId: string;
+  content: string;
+  authorId: string | null;
+  authorNickname: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+const toComment = (r: CommunityCommentApi): CommunityComment => ({
+  id: r.id,
+  post_id: r.postId,
+  content: r.content,
+  author_id: r.authorId ?? null,
+  author_nickname: r.authorNickname ?? null,
+  created_at: r.createdAt,
+  updated_at: r.updatedAt ?? undefined
+});
+
+/** 댓글 목록(공개). */
+export const fetchComments = async (
+  postId: string
+): Promise<CommunityComment[]> => {
+  const response = await fetch(`${API_BASE_URL}/community/${postId}/comments`, {
+    headers: buildHeaders()
+  });
+  if (!response.ok) {
+    throw new Error('댓글을 불러오지 못했습니다.');
+  }
+  const json = (await response.json()) as ApiResponse<CommunityCommentApi[]>;
+  if (!json.success || !Array.isArray(json.data)) {
+    return [];
+  }
+  return json.data.map(toComment);
+};
+
+/** 댓글 작성(인증). */
+export const createComment = async (
+  postId: string,
+  content: string,
+  authorNickname: string
+): Promise<CommunityComment> => {
+  const response = await authorizedFetch(`/community/${postId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content, authorNickname })
+  });
+  if (!response.ok) {
+    throw new Error('댓글 등록에 실패했습니다.');
+  }
+  const json = (await response.json()) as ApiResponse<CommunityCommentApi>;
+  return toComment(json.data);
+};
+
+/** 댓글 삭제(작성자 본인만). */
+export const deleteComment = async (commentId: string) => {
+  const response = await authorizedFetch(`/community/comments/${commentId}`, {
+    method: 'DELETE'
+  });
+  if (!response.ok) {
+    throw new Error('댓글 삭제에 실패했습니다.');
+  }
+};
