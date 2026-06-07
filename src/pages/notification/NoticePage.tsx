@@ -1,88 +1,65 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, ChevronRight } from 'lucide-react';
-import { getFoundItems } from '@/entities/found/api/getFoundItems';
-import { AllData } from '@/types/types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  AppNotification,
+  fetchNotifications,
+  markAllNotificationsRead,
+  markNotificationRead
+} from '@/lib/api/notification';
+import { getTimeDiff } from '@/lib/utils/getTimeDiff';
 import none_alarm from '@/assets/none_alarm.svg';
 import { useAuthStore } from '@/features/auth/model/authStore';
 
-interface KeywordType {
-  keywords: string;
-}
-
-interface RecommendationType {
-  keyword: string;
-  selectedItem: string;
-}
-
 const Notice = () => {
   const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
-  const [userKeyword, setUserKeyword] = useState<KeywordType | null>(null);
-  const [recommendations, setRecommendations] = useState<RecommendationType[]>(
-    () => {
-      if (typeof window === 'undefined') return [];
-      const saved = window.localStorage.getItem('recommendations');
-      return saved ? JSON.parse(saved) : [];
-    }
-  );
+  const userId = useAuthStore((s) => s.user?.id);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (user) setUserKeyword({ keywords: user.keywords ?? '' });
-  }, [user]);
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: ['notifications', userId],
+    queryFn: fetchNotifications,
+    enabled: !!userId,
+    staleTime: 1000 * 15
+  });
 
-  useEffect(() => {
-    const fetchPosts = async () => {
-      if (!userKeyword) return;
-      const keywordsArray = userKeyword.keywords.split(', ').filter((k) => k);
-      const data: AllData[] = await getFoundItems(0, 100);
-      const recentItemData = data.map(
-        (item) => `${item.fdPrdtNm}^${item.atcId}`
-      );
-
-      const newRecommendations = keywordsArray
-        .map((keyword) => {
-          const filteredItems = recentItemData.filter((item) =>
-            item.includes(keyword)
-          );
-          if (filteredItems.length > 0) {
-            const randomIndex = Math.floor(Math.random() * filteredItems.length);
-            return { keyword, selectedItem: filteredItems[randomIndex] };
-          }
-          return null;
-        })
-        .filter((item): item is RecommendationType => item !== null);
-
-      if (newRecommendations.length > 0) {
-        setRecommendations((prev) => {
-          const updated = [...prev, ...newRecommendations];
-          if (typeof window !== 'undefined') {
-            window.localStorage.setItem(
-              'recommendations',
-              JSON.stringify(updated)
-            );
-          }
-          return updated;
-        });
-      }
-    };
-    fetchPosts();
-    const interval = setInterval(fetchPosts, 30000);
-    return () => clearInterval(interval);
-  }, [userKeyword]);
-
-  const handleButton = (index: number) => {
-    navigate(
-      `/getlist/detail/${recommendations[index].selectedItem.split('^')[1]}`
-    );
-    const updated = recommendations.filter((_, i) => i !== index);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('recommendations', JSON.stringify(updated));
-    }
-    setRecommendations(updated);
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+    queryClient.invalidateQueries({ queryKey: ['unreadCount', userId] });
   };
 
-  if (recommendations.length === 0) {
+  const handleClick = async (n: AppNotification) => {
+    if (!n.read) {
+      try {
+        await markNotificationRead(n.id);
+        invalidate();
+      } catch {
+        /* 무시 */
+      }
+    }
+    if (n.item_id) {
+      const to =
+        n.item_type === 'lost'
+          ? `/lostlist/detail/${n.item_id}`
+          : `/getlist/detail/${n.item_id}`;
+      navigate(to);
+    }
+  };
+
+  const handleReadAll = async () => {
+    try {
+      await markAllNotificationsRead();
+      invalidate();
+    } catch {
+      /* 무시 */
+    }
+  };
+
+  if (isLoading) {
+    return <p className="pt-16 text-center text-sm text-gray-400">불러오는 중...</p>;
+  }
+
+  if (notifications.length === 0) {
     return (
       <div className="flex flex-col items-center pt-16">
         <img src={none_alarm} alt="" className="w-28 opacity-90" />
@@ -91,31 +68,54 @@ const Notice = () => {
     );
   }
 
+  const hasUnread = notifications.some((n) => !n.read);
+
   return (
-    <ul className="divide-y divide-gray-50">
-      {recommendations.map((recommendation, index) => (
-        <li key={index}>
+    <div>
+      {hasUnread && (
+        <div className="flex justify-end pt-2">
           <button
             type="button"
-            onClick={() => handleButton(index)}
-            className="flex w-full items-start gap-3 py-4 text-left active:bg-gray-50"
+            onClick={handleReadAll}
+            className="text-xs font-medium text-gray-400 hover:text-primary"
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF1FF]">
-              <Bell size={18} className="text-primary" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <span className="inline-flex rounded-md bg-[#E8F0FF] px-2 py-0.5 text-[11px] font-bold text-primary">
-                {recommendation.keyword}
-              </span>
-              <p className="mt-1.5 text-sm text-gray-700">
-                등록한 키워드와 일치하는 습득물이 새로 등록되었어요
-              </p>
-            </div>
-            <ChevronRight size={18} className="mt-2 shrink-0 text-gray-300" />
+            모두 읽음
           </button>
-        </li>
-      ))}
-    </ul>
+        </div>
+      )}
+      <ul className="divide-y divide-gray-50">
+        {notifications.map((n) => (
+          <li key={n.id}>
+            <button
+              type="button"
+              onClick={() => handleClick(n)}
+              className={`flex w-full items-start gap-3 py-4 text-left active:bg-gray-50 ${
+                n.read ? '' : 'bg-[#F5F9FF]'
+              }`}
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF1FF]">
+                <Bell size={18} className="text-primary" />
+              </span>
+              <div className="min-w-0 flex-1">
+                {n.keyword && (
+                  <span className="inline-flex rounded-md bg-[#E8F0FF] px-2 py-0.5 text-[11px] font-bold text-primary">
+                    {n.keyword}
+                  </span>
+                )}
+                <p className="mt-1.5 text-sm font-semibold text-gray-800">{n.title}</p>
+                {n.message && (
+                  <p className="mt-0.5 truncate text-sm text-gray-500">{n.message}</p>
+                )}
+                <p className="mt-0.5 text-xs text-gray-400">
+                  {getTimeDiff({ createdAt: n.created_at })}
+                </p>
+              </div>
+              <ChevronRight size={18} className="mt-2 shrink-0 text-gray-300" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 };
 
