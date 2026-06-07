@@ -124,7 +124,8 @@ const PostDetailBody: React.FC = () => {
       </p>
     );
 
-  const { title, content, tag, author_id, author_nickname, created_at } = thisData;
+  const { title, content, tag, author_id, author_nickname, created_at, image_urls } =
+    thisData;
   const isPostOwner = Boolean(user?.id && author_id && user.id === author_id);
 
   return (
@@ -180,6 +181,28 @@ const PostDetailBody: React.FC = () => {
       <p className="text-[15px] leading-7 whitespace-pre-wrap text-gray-700">
         {content}
       </p>
+
+      {/* 첨부 이미지 */}
+      {image_urls.length > 0 && (
+        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {image_urls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="block overflow-hidden rounded-xl border border-gray-100"
+            >
+              <img
+                src={url}
+                alt="첨부 이미지"
+                loading="lazy"
+                className="aspect-square w-full object-cover transition-transform hover:scale-[1.03]"
+              />
+            </a>
+          ))}
+        </div>
+      )}
 
       {/* 공감 */}
       <div className="mt-7 flex justify-center">
