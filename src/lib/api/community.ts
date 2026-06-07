@@ -7,8 +7,17 @@ export interface CommunityPost {
   tag: string | null;
   author_id: string | null;
   author_nickname: string | null;
+  image_urls: string[];
   created_at: string;
   updated_at?: string;
+}
+
+export interface CommunityPage {
+  items: CommunityPost[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
 }
 
 // 커뮤니티 전체(조회/작성)를 Spring 백엔드 /api/community 사용. 작성은 JWT 인증 필요.
@@ -17,6 +26,10 @@ interface ApiResponse<T> {
   success: boolean;
   message?: string;
   data: T;
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
 }
 
 interface CommunityPostApi {
@@ -26,6 +39,7 @@ interface CommunityPostApi {
   tag: string | null;
   authorId: string | null;
   authorNickname: string | null;
+  imageUrls?: string[] | null;
   createdAt: string;
   updatedAt?: string | null;
 }
@@ -37,9 +51,53 @@ const toPost = (r: CommunityPostApi): CommunityPost => ({
   tag: r.tag ?? null,
   author_id: r.authorId ?? null,
   author_nickname: r.authorNickname ?? null,
+  image_urls: r.imageUrls ?? [],
   created_at: r.createdAt,
   updated_at: r.updatedAt ?? undefined
 });
+
+/** 페이지네이션 목록. tag 가 '전체'/빈값이면 전체 조회. */
+export const fetchCommunityPage = async (
+  page: number,
+  size: number,
+  tag?: string
+): Promise<CommunityPage> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size)
+  });
+  if (tag && tag !== '전체') params.set('tag', tag);
+  const response = await fetch(`${API_BASE_URL}/community?${params.toString()}`, {
+    headers: buildHeaders()
+  });
+  if (!response.ok) {
+    throw new Error('게시글을 불러오지 못했습니다.');
+  }
+  const json = (await response.json()) as ApiResponse<CommunityPostApi[]>;
+  return {
+    items: Array.isArray(json.data) ? json.data.map(toPost) : [],
+    page: json.page ?? page,
+    size: json.size ?? size,
+    totalElements: json.totalElements ?? 0,
+    totalPages: json.totalPages ?? 0
+  };
+};
+
+/** 커뮤니티 이미지 업로드 → 공개 URL. (multipart 이므로 Content-Type 미지정) */
+export const uploadCommunityImage = async (file: File): Promise<string> => {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await fetch(`${API_BASE_URL}/uploads/image`, {
+    method: 'POST',
+    headers: buildHeaders({ auth: true }), // X-API-KEY + Bearer, Content-Type 은 브라우저가 설정
+    body: form
+  });
+  if (!response.ok) {
+    throw new Error('이미지 업로드에 실패했습니다.');
+  }
+  const json = (await response.json()) as ApiResponse<{ url: string }>;
+  return json.data.url;
+};
 
 export const fetchRecentCommunityPosts = async (
   limit: number = 10
@@ -99,6 +157,7 @@ export const createCommunityPost = async (
   payload: Pick<CommunityPost, 'title' | 'content' | 'tag'> & {
     author_id?: string;
     author_nickname: string;
+    image_urls?: string[];
   }
 ) => {
   // authorId는 서버가 JWT(@AuthenticationPrincipal)에서 결정한다.
@@ -108,7 +167,8 @@ export const createCommunityPost = async (
       title: payload.title,
       content: payload.content,
       tag: payload.tag,
-      authorNickname: payload.author_nickname
+      authorNickname: payload.author_nickname,
+      imageUrls: payload.image_urls ?? []
     })
   });
   if (!response.ok) {
@@ -119,14 +179,17 @@ export const createCommunityPost = async (
 /** 게시글 수정(작성자 본인만). 서버가 JWT 로 소유권 검사. */
 export const updateCommunityPost = async (
   id: string,
-  payload: Pick<CommunityPost, 'title' | 'content' | 'tag'>
+  payload: Pick<CommunityPost, 'title' | 'content' | 'tag'> & {
+    image_urls?: string[];
+  }
 ) => {
   const response = await authorizedFetch(`/community/${id}`, {
     method: 'PUT',
     body: JSON.stringify({
       title: payload.title,
       content: payload.content,
-      tag: payload.tag
+      tag: payload.tag,
+      imageUrls: payload.image_urls ?? []
     })
   });
   if (!response.ok) {
