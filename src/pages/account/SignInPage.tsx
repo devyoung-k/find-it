@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/model/authStore';
 import InputForm from '@/features/auth/sign-in/ui/InputForm';
 import ButtonVariable from '@/shared/ui/buttons/ButtonVariable';
@@ -21,6 +21,9 @@ type AlertProps =
 
 const SignIn = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  // 인증가드(useAuthGuard)가 넘긴 원래 경로. 로그인 후 그쪽으로 복귀.
+  const from = (location.state as { from?: string } | null)?.from;
   const login = useAuthStore((s) => s.login);
   // 변수
   const [emailValue, setEmailValue] = useState('');
@@ -86,7 +89,7 @@ const SignIn = () => {
 
     try {
       await login(emailValue.trim(), passwordValue);
-      navigate('/');
+      navigate(from ?? '/', { replace: true });
     } catch (error) {
       logger.warn('로그인 실패', error);
       setAlertPassword('invalidValue');
