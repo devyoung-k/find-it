@@ -100,6 +100,14 @@ const AppRouter = () => {
             </RequireAuth>
           }
         />
+        <Route
+          path="/createpost/:id"
+          element={
+            <RequireAuth>
+              <CreatePost />
+            </RequireAuth>
+          }
+        />
         <Route path="/searchpost" element={<SearchPost />} />
         <Route path="*" element={<NotFound />} />
       </Route>
