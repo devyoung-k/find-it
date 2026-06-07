@@ -280,3 +280,60 @@ export const deleteComment = async (commentId: string) => {
     throw new Error('댓글 삭제에 실패했습니다.');
   }
 };
+
+export interface MyComment {
+  id: string;
+  post_id: string;
+  post_title: string;
+  content: string;
+  created_at: string;
+}
+
+/** 내가 쓴 글(작성자별 페이지). 인증 필요. */
+export const fetchMyPosts = async (
+  page: number,
+  size: number
+): Promise<CommunityPage> => {
+  const response = await authorizedFetch(
+    `/community/me/posts?page=${page}&size=${size}`,
+    { method: 'GET' }
+  );
+  if (!response.ok) {
+    throw new Error('내 글을 불러오지 못했습니다.');
+  }
+  const json = (await response.json()) as ApiResponse<CommunityPostApi[]>;
+  return {
+    items: Array.isArray(json.data) ? json.data.map(toPost) : [],
+    page: json.page ?? page,
+    size: json.size ?? size,
+    totalElements: json.totalElements ?? 0,
+    totalPages: json.totalPages ?? 0
+  };
+};
+
+interface MyCommentApi {
+  id: string;
+  postId: string;
+  postTitle: string;
+  content: string;
+  createdAt: string;
+}
+
+/** 내가 쓴 댓글(최신순, 원문 제목 포함). 인증 필요. */
+export const fetchMyComments = async (): Promise<MyComment[]> => {
+  const response = await authorizedFetch('/community/me/comments', {
+    method: 'GET'
+  });
+  if (!response.ok) {
+    throw new Error('내 댓글을 불러오지 못했습니다.');
+  }
+  const json = (await response.json()) as ApiResponse<MyCommentApi[]>;
+  if (!json.success || !Array.isArray(json.data)) return [];
+  return json.data.map((r) => ({
+    id: r.id,
+    post_id: r.postId,
+    post_title: r.postTitle,
+    content: r.content,
+    created_at: r.createdAt
+  }));
+};
