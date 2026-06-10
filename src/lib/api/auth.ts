@@ -36,17 +36,25 @@ const resolveApiBaseUrl = () => {
   const envValue = (
     import.meta.env.VITE_API_BASE_URL as string | undefined
   )?.replace(/\/$/, '');
-  const base =
-    envValue && envValue.length > 0 ? envValue : 'http://52.79.241.212:8080/api';
+
+  if (!envValue) {
+    // Vercel 배포에서는 /api rewrite가 백엔드로 프록시하므로 동일 출처로 폴백
+    logger.warn(
+      'VITE_API_BASE_URL이 설정되지 않아 동일 출처 /api 로 폴백합니다.'
+    );
+    return typeof window !== 'undefined'
+      ? `${window.location.origin}/api`
+      : '/api';
+  }
 
   if (
     typeof window !== 'undefined' &&
     window.location.protocol === 'https:' &&
-    base.startsWith('http://')
+    envValue.startsWith('http://')
   ) {
     return `${window.location.origin}/api`;
   }
-  return base;
+  return envValue;
 };
 
 export const API_BASE_URL = resolveApiBaseUrl();

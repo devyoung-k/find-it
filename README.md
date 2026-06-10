@@ -50,8 +50,8 @@
 ### 🔔 **스마트 키워드 알림**
 
 - 사용자 맞춤 키워드 최대 10개 등록
-- Supabase 기반 실시간 추천 알림
-- 중복 방지 및 로컬 캐싱 최적화
+- 백엔드 스케줄러가 신규 습득물을 키워드와 매칭해 알림 자동 생성
+- 미읽음 카운트 뱃지 + 읽음 처리 API 연동
 
 ### 💬 **커뮤니티 & 공유**
 
@@ -71,15 +71,15 @@
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/FRONTENDSCHOOL8/find-it.git
+git clone https://github.com/devyoung-k/find-it.git
 cd find-it
 
 # 2. 의존성 설치 (pnpm 권장)
 pnpm install
 
 # 3. 환경 변수 설정
-cp .env.example .env
-# .env 파일에 Supabase URL, API 키 등 설정
+cp .env.example .env.local
+# .env.local 파일에 백엔드 API URL, API 키 등 설정
 
 # 4. 개발 서버 실행
 pnpm dev
@@ -90,18 +90,21 @@ pnpm dev
 ### 📋 필수 환경 변수
 
 ```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_BASE_URL=https://your-backend-host/api
+VITE_API_SECURITY_KEY=your-backend-api-key
 VITE_APP_BASE_URL=http://localhost:5173
 ```
+
+전체 목록은 [.env.example](.env.example)을 참고하세요.
 
 ---
 
 ## 🆕 최근 업데이트
 
-- **전역 프로그레스바 도입**: `RouteProgressProvider`와 `TopProgressBar`로 라우팅·무한 스크롤·Suspense 로딩을 하나의 상단 진행 표시로 통합.
-- **로딩 상태 일원화**: `QueryState` + `useProgressIndicator` 조합으로 모든 비동기 쿼리가 자동으로 진행률을 공유하도록 리팩토링.
-- **모바일 헤더 호환성 개선**: 고정 헤더 위에서도 로딩 바가 보이도록 z-index 및 레이아웃을 조정해 일관된 UX 제공.
+- **자체 백엔드 전환 완료**: Supabase를 걷어내고 Spring Boot + PostgreSQL 백엔드([findit-server](https://github.com/devyoung-k/findit-server))로 인증·커뮤니티·북마크·알림을 이전.
+- **키워드 알림 실연동**: 백엔드가 경찰청 데이터 동기화 시 키워드 매칭 알림을 생성하고, 프론트는 미읽음 뱃지·읽음 처리까지 연동.
+- **북마크·좋아요 DB 영속화**: localStorage 기반에서 사용자 계정 기반 영속 저장으로 전환 (낙관적 업데이트 + 롤백).
+- **커뮤니티 강화**: 댓글, 게시글 수정/삭제, 이미지 첨부, 페이지네이션(20/50), 내가 쓴 글·댓글 조회.
 
 ---
 
@@ -122,7 +125,8 @@ VITE_APP_BASE_URL=http://localhost:5173
 
 ### Backend & API
 
-![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot_3-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![Police API](https://img.shields.io/badge/경찰청_Open_API-003580?style=flat-square)
 ![Kakao Maps](https://img.shields.io/badge/Kakao_Maps-FFCD00?style=flat-square&logo=kakao&logoColor=black)
 
@@ -145,10 +149,10 @@ graph TB
         C[Kakao Maps API]
     end
 
-    subgraph "Backend"
-        D[Supabase Auth]
-        E[Supabase Database]
-        F[Vercel Proxy]
+    subgraph "Backend (findit-server)"
+        D[Spring Boot REST API]
+        E[(PostgreSQL)]
+        S[스케줄러 동기화·키워드 알림]
     end
 
     subgraph "Frontend Layer"
@@ -158,24 +162,15 @@ graph TB
         J[React Router]
     end
 
-    subgraph "Data Flow"
-        K[xmlToJson Parser]
-        L[API Wrapper Layer]
-        M[React Query Hooks]
-    end
-
-    A --> F
-    B --> F
-    F --> K
-    K --> L
-    L --> M
-    M --> H
+    A --> S
+    S --> E
+    D --> E
+    G -->|REST /api - Vercel rewrite| D
     H --> G
     I --> G
-    D --> E
-    E --> G
-    C --> G
     J --> G
+    B --> G
+    C --> G
 ```
 
 ### 📁 프로젝트 구조 (Feature-Sliced Design)
@@ -205,7 +200,7 @@ src/
 
 - XML → JSON 변환 레이어 구축 (`xmlToJson` → `raiseValue` → `getAPIData`)
 - 타입 안전성 보장 및 재사용 가능한 fetch 추상화
-- 관련 파일: `src/lib/utils/xmlToJson.ts`, `src/lib/utils/getAPIData.ts`
+- 현재는 자체 백엔드(findit-server)가 데이터 동기화·정규화를 담당하도록 대체
 
 **2. 무한 스크롤 & UX 최적화 (100%)**
 
@@ -215,9 +210,9 @@ src/
 
 **3. 키워드 알림 시스템 (100%)**
 
-- Supabase + 로컬스토리지 하이브리드 캐싱
-- 최대 10개 제한, 중복 방지 로직
-- 관련 파일: `src/pages/notification/SettingPage.tsx`
+- 백엔드 알림 API 연동 (키워드 매칭 알림은 서버 스케줄러가 생성)
+- 최대 10개 제한, 미읽음 카운트 뱃지·읽음 처리
+- 관련 파일: `src/pages/notification/NotificationPage.tsx`, `src/lib/api/notification.ts`
 
 **4. 배포 환경 안정화 (100%)**
 
@@ -252,33 +247,24 @@ src/
 
 ## 🔥 기술적 하이라이트
 
-### 1️⃣ 공공 데이터 표준화 파이프라인
+### 1️⃣ Supabase → 자체 백엔드 마이그레이션 + 인증 fetch 레이어
 
-**문제**: 경찰청 API는 XML 응답 + 일관성 없는 키 구조
-**해결**: 3단계 변환 레이어로 타입 안전성 확보
+**문제**: BaaS 의존으로 키워드 알림·데이터 동기화 같은 서버 로직 확장에 한계
+**해결**: 인증/커뮤니티/북마크/알림을 자체 Spring Boot API로 이전하고, 프론트 API 호출을 `authorizedFetch` 래퍼로 단일화
 
 ```typescript
-// src/lib/utils/xmlToJson.ts
-export const xmlToJson = (xml: string) => {
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(xml, 'text/xml');
-  // XML → JSON 객체 변환
-};
-
-// src/lib/utils/raiseValue.ts
-export const raiseValue = (obj: any) => {
-  // #text 노드 추출 및 평탄화
-};
-
-// src/lib/utils/getAPIData.ts
-export const getAPIData = async (params: APIParams) => {
-  const xml = await fetch(url);
-  const json = xmlToJson(xml);
-  return raiseValue(json); // 타입 안전한 데이터 반환
+// src/lib/api/auth.ts
+export const authorizedFetch = async (path, init, retry = true) => {
+  // Bearer 토큰 자동 첨부
+  // 401 응답 시 refresh 토큰으로 재발급 후 1회 재시도
+  // 동시 다발 401에도 refresh 요청은 한 번만 실행 (Promise 캐싱)
+  // refresh 실패 시 onSessionExpired 콜백으로 게스트 전환
 };
 ```
 
-**성과**: 모든 API 엔드포인트에서 일관된 데이터 구조 사용
+**성과**: 토큰 만료를 사용자 개입 없이 자동 복구, 모든 도메인 API가 동일한 인증·에러 처리 경로 공유
+
+> 팀 프로젝트 당시에는 경찰청 XML 응답을 `xmlToJson → raiseValue → getAPIData` 3단계 변환 레이어로 표준화했으나, 현재는 백엔드가 동기화·정규화를 담당하면서 해당 레이어는 제거되었습니다.
 
 ---
 
@@ -361,7 +347,11 @@ const getBaseUrl = () => {
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "http://15.164.218.185:8080/api/$1"
+      "destination": "https://findit-api.devyoung.dev/api/$1"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "https://findit-api.devyoung.dev/uploads/$1"
     },
     {
       "source": "/(.*)",
